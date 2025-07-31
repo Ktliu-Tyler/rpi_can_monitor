@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAN Data Monitor - NTURT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .status-ok { @apply text-green-500 font-bold; }
+        .status-bad { @apply text-red-500 font-bold; }
+        .status-unknown { @apply text-gray-500; }
+        .data-card { @apply bg-white rounded-lg shadow-md p-4 border-l-4; }
+        .data-card.gps { @apply border-blue-500; }
+        .data-card.velocity { @apply border-green-500; }
+        .data-card.accumulator { @apply border-yellow-500; }
+        .data-card.inverter { @apply border-purple-500; }
+        .value-display { @apply font-mono text-sm; }
+        .heartbeat-indicator {
+            @apply inline-block w-3 h-3 rounded-full;
+            animation: pulse 2s infinite;
+        }
+        .heartbeat-ok { @apply bg-green-500; }
+        .heartbeat-fail { @apply bg-red-500; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .map-container {
+            height: 400px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        /* GPS Ripple Effect */
+        .ripple-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #60a5fa;
+            position: relative;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+        }
+        
+        .ripple-marker::before,
+        .ripple-marker::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            border: 2px solid #60a5fa;
+            transform: translate(-50%, -50%);
+            animation: ripple 2s infinite;
+        }
+        
+        .ripple-marker::after {
+            animation-delay: 1s;
+        }
+        
+        @keyframes ripple {
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 1;
+            }
+            100% {
+                width: 60px;
+                height: 60px;
+                opacity: 0;
+            }
+        }
+        .segment-container {
+            border-left: 3px solid #e5e7eb;
+            padding-left: 8px;
+            margin-bottom: 4px;
+        }
+        .segment-container:nth-child(odd) {
+            border-left-color: #3b82f6;
+        }
+        .segment-container:nth-child(even) {
+            border-left-color: #10b981;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">CAN Data Monitor</h1>
+                    <p class="text-gray-600">NTURT Racing Team - Real-time Vehicle Data</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-gray-500">Messages Received</div>
+                    <div id="message-count" class="text-2xl font-bold text-blue-600">0</div>
+                    <div id="connection-status" class="text-sm text-green-500">Connected</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPS Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- GPS Data -->
+            <div class="data-card gps">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-blue-500 rounded-full mr-2"></span>
+                    GPS Data
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-sm text-gray-600">Latitude</div>
+                        <div id="gps-lat" class="value-display text-lg">N/A</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Longitude</div>
+                        <div id="gps-lon" class="value-display text-lg">N/A</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Altitude</div>
+                        <div id="gps-alt" class="value-display text-lg">N/A</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Status</div>
+                        <div id="gps-status" class="value-display text-lg">N/A</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPS Map -->
+            <div class="data-card gps">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Real-time Location</h2>
+                <div id="map" class="map-container"></div>
+            </div>
+        </div>
+
+        <!-- Velocity Section -->
+        <div class="data-card velocity mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <span class="w-4 h-4 bg-green-500 rounded-full mr-2"></span>
+                Velocity Data
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-sm text-gray-600">Linear X</div>
+                    <div id="vel-linear-x" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Linear Y</div>
+                    <div id="vel-linear-y" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Linear Z</div>
+                    <div id="vel-linear-z" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Speed</div>
+                    <div id="vel-speed" class="value-display text-lg text-blue-600 font-bold">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Angular X</div>
+                    <div id="vel-angular-x" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Angular Y</div>
+                    <div id="vel-angular-y" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Angular Z</div>
+                    <div id="vel-angular-z" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Magnitude</div>
+                    <div id="vel-magnitude" class="value-display text-lg">N/A</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accumulator Section -->
+        <div class="data-card accumulator mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <span class="w-4 h-4 bg-yellow-500 rounded-full mr-2"></span>
+                Accumulator Data
+                <span id="acc-heartbeat" class="heartbeat-indicator heartbeat-fail ml-2"></span>
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4">
+                <div>
+                    <div class="text-sm text-gray-600">SOC</div>
+                    <div id="acc-soc" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Voltage</div>
+                    <div id="acc-voltage" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Current</div>
+                    <div id="acc-current" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Temperature</div>
+                    <div id="acc-temperature" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Status</div>
+                    <div id="acc-status" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Capacity</div>
+                    <div id="acc-capacity" class="value-display text-lg">N/A</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <div class="text-sm text-gray-600 mb-2">Cell Voltages (7 Segments) - All Values</div>
+                    <div id="acc-cell-voltages" class="space-y-2">
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 0 (Cells 0-14) - Battery Pack 1</div>
+                            <div id="voltage-segment-0" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 1 (Cells 15-29) - Battery Pack 2</div>
+                            <div id="voltage-segment-1" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 2 (Cells 30-44) - Battery Pack 3</div>
+                            <div id="voltage-segment-2" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 3 (Cells 45-59) - Battery Pack 4</div>
+                            <div id="voltage-segment-3" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 4 (Cells 60-74) - Battery Pack 5</div>
+                            <div id="voltage-segment-4" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 5 (Cells 75-89) - Battery Pack 6</div>
+                            <div id="voltage-segment-5" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 6 (Cells 90-104) - Battery Pack 7</div>
+                            <div id="voltage-segment-6" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600 mb-2">Cell Temperatures (7 Segments) - All Values</div>
+                    <div id="acc-cell-temps" class="space-y-2">
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 0 (Cells 0-14) - Battery Pack 1</div>
+                            <div id="temp-segment-0" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 1 (Cells 15-29) - Battery Pack 2</div>
+                            <div id="temp-segment-1" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 2 (Cells 30-44) - Battery Pack 3</div>
+                            <div id="temp-segment-2" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 3 (Cells 45-59) - Battery Pack 4</div>
+                            <div id="temp-segment-3" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 4 (Cells 60-74) - Battery Pack 5</div>
+                            <div id="temp-segment-4" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 5 (Cells 75-89) - Battery Pack 6</div>
+                            <div id="temp-segment-5" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                        <div class="segment-container">
+                            <div class="text-xs text-gray-500 mb-1">Segment 6 (Cells 90-104) - Battery Pack 7</div>
+                            <div id="temp-segment-6" class="value-display text-xs bg-gray-50 p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inverters Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Front Inverters -->
+            <div class="data-card inverter">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-purple-500 rounded-full mr-2"></span>
+                    Front Inverters (FL / FR)
+                </h2>
+                <div class="space-y-4">
+                    <div id="inverter-1" class="bg-gray-50 p-3 rounded">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold">FL (Front Left)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="1"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                    <div id="inverter-2" class="bg-gray-50 p-3 rounded">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold">FR (Front Right)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="2"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rear Inverters -->
+            <div class="data-card inverter">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-purple-500 rounded-full mr-2"></span>
+                    Rear Inverters (RL / RR)
+                </h2>
+                <div class="space-y-4">
+                    <div id="inverter-3" class="bg-gray-50 p-3 rounded">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold">RL (Rear Left)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="3"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                    <div id="inverter-4" class="bg-gray-50 p-3 rounded">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold">RR (Rear Right)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="4"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-6 text-center text-gray-500 text-sm">
+            <p>Last Update: <span id="last-update">N/A</span></p>
+            <p>NTURT Racing Team - CAN Data Monitor v1.0</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        
+        // Initialize Map (without default coordinates)
+        let map = L.map('map').setView([0, 0], 2); // Start with world view
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        let vehicleMarker = null;
+        let pathPoints = [];
+        let pathPolyline = null;
+        let mapInitialized = false; // Track if we've received first GPS data
+
+        // Connection status
+        ws.onopen = function() {
+            document.getElementById('connection-status').textContent = 'Connected';
+            document.getElementById('connection-status').className = 'text-sm text-green-500';
+        };
+
+        ws.onclose = function() {
+            document.getElementById('connection-status').textContent = 'Disconnected';
+            document.getElementById('connection-status').className = 'text-sm text-red-500';
+        };
+
+        ws.onerror = function() {
+            document.getElementById('connection-status').textContent = 'Error';
+            document.getElementById('connection-status').className = 'text-sm text-red-500';
+        };
+
+        // Data update handler
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            updateDisplay(data);
+        };
+
+        function formatValue(value, suffix = '', decimals = 2) {
+            if (value === null || value === undefined) {
+                return 'N/A';
+            }
+            if (typeof value === 'number') {
+                return value.toFixed(decimals) + suffix;
+            }
+            return value.toString() + suffix;
+        }
+
+        function formatStatus(status) {
+            if (status === null || status === undefined) {
+                return '<span class="status-unknown">N/A</span>';
+            }
+            if (status === 1 || status === true) {
+                return '<span class="status-ok">OK</span>';
+            }
+            return '<span class="status-bad">FAIL</span>';
+        }
+
+        function formatInverterStatus(status) {
+            if (status === null || status === undefined) {
+                return '<span class="status-unknown">N/A</span>';
+            }
+            
+            const statusHex = `0x${status.toString(16).toUpperCase().padStart(4, '0')}`;
+            let statusText = '';
+            let statusClass = 'status-unknown';
+            
+            // 根據NMT state code解析狀態
+            switch (status) {
+                case 0x00:
+                    statusText = 'Boot up (Initialising)';
+                    statusClass = 'status-unknown';
+                    break;
+                case 0x04:
+                    statusText = 'Stopped';
+                    statusClass = 'status-bad';
+                    break;
+                case 0x05:
+                    statusText = 'Operational';
+                    statusClass = 'status-ok';
+                    break;
+                case 0x7f:
+                    statusText = 'Pre-operational';
+                    statusClass = 'status-unknown';
+                    break;
+                default:
+                    statusText = 'Unknown';
+                    statusClass = 'status-unknown';
+                    break;
+            }
+            
+            return `<span class="${statusClass}">${statusHex} - ${statusText}</span>`;
+        }
+
+        function formatCellSegments(cellArray, suffix = '') {
+            if (!cellArray || !Array.isArray(cellArray)) {
+                return Array(7).fill('N/A');
+            }
+            
+            const segments = [];
+            for (let segment = 0; segment < 7; segment++) {
+                const startIndex = segment * 15;
+                const endIndex = Math.min(startIndex + 15, 105);
+                const segmentData = cellArray.slice(startIndex, endIndex);
+                
+                // 顯示所有實際數值
+                const formattedValues = [];
+                for (let i = 0; i < 15; i++) {
+                    const value = segmentData[i];
+                    if (value !== null && value !== undefined) {
+                        formattedValues.push(`Cell${startIndex + i}: ${value.toFixed(2)}${suffix}`);
+                    } else {
+                        formattedValues.push(`Cell${startIndex + i}: N/A`);
+                    }
+                }
+                
+                segments.push(formattedValues.join(', '));
+            }
+            
+            return segments;
+        }
+
+        function updateCellSegments(data) {
+            // Update voltage segments
+            if (data.accumulator && data.accumulator.cell_voltages) {
+                const voltageSegments = formatCellSegments(data.accumulator.cell_voltages, 'V');
+                for (let i = 0; i < 7; i++) {
+                    const element = document.getElementById(`voltage-segment-${i}`);
+                    if (element) {
+                        element.textContent = voltageSegments[i];
+                    }
+                }
+            }
+            
+            // Update temperature segments
+            if (data.accumulator && data.accumulator.cell_temperatures) {
+                const tempSegments = formatCellSegments(data.accumulator.cell_temperatures, '°C');
+                for (let i = 0; i < 7; i++) {
+                    const element = document.getElementById(`temp-segment-${i}`);
+                    if (element) {
+                        element.textContent = tempSegments[i];
+                    }
+                }
+            }
+        }
+
+        function updateHeartbeat(elementId, status) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            if (status === true) {
+                element.className = 'heartbeat-indicator heartbeat-ok';
+            } else {
+                element.className = 'heartbeat-indicator heartbeat-fail';
+            }
+        }
+
+        function updateInverterHeartbeat(invNum, status) {
+            const element = document.querySelector(`[data-inv="${invNum}"]`);
+            if (!element) return;
+            
+            if (status === true) {
+                element.className = 'heartbeat-indicator heartbeat-ok';
+            } else {
+                element.className = 'heartbeat-indicator heartbeat-fail';
+            }
+        }
+
+        function updateGPSMap(lat, lon) {
+            // Only update map if we receive valid GPS coordinates
+            if (lat !== null && lon !== null && lat !== undefined && lon !== undefined && 
+                !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                const latLng = [lat, lon];
+                
+                // First time receiving GPS data - center map properly
+                if (!mapInitialized) {
+                    map.setView(latLng, 15);
+                    mapInitialized = true;
+                }
+                
+                // Update or create vehicle marker with ripple effect
+                if (vehicleMarker) {
+                    vehicleMarker.setLatLng(latLng);
+                } else {
+                    // Create custom ripple icon
+                    const rippleIcon = L.divIcon({
+                        className: 'ripple-marker',
+                        html: '',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+                    
+                    vehicleMarker = L.marker(latLng, { icon: rippleIcon }).addTo(map)
+                        .bindPopup('Vehicle Position');
+                }
+                
+                // Center map on vehicle position
+                if (map.getZoom() >= 10) {
+                    map.setView(latLng, map.getZoom());
+                }
+            }
+            // If GPS data is invalid/missing, do nothing - keep previous position
+        }
+
+        function updateDisplay(data) {
+            // Update message count
+            document.getElementById('message-count').textContent = data.message_count || 0;
+            
+            // Update last update time
+            if (data.update_time) {
+                const updateTime = new Date(data.update_time);
+                document.getElementById('last-update').textContent = updateTime.toLocaleString();
+            }
+            
+            // Update GPS data
+            if (data.gps) {
+                document.getElementById('gps-lat').textContent = formatValue(data.gps.lat, '°', 7);
+                document.getElementById('gps-lon').textContent = formatValue(data.gps.lon, '°', 7);
+                document.getElementById('gps-alt').textContent = formatValue(data.gps.alt, 'm', 1);
+                document.getElementById('gps-status').innerHTML = data.gps.status !== null ? 
+                    `0x${data.gps.status.toString(16).toUpperCase().padStart(2, '0')}` : 'N/A';
+                
+                // Update GPS map
+                updateGPSMap(data.gps.lat, data.gps.lon);
+            }
+            
+            // Update velocity data
+            if (data.velocity) {
+                document.getElementById('vel-linear-x').textContent = formatValue(data.velocity.linear_x, ' m/s', 3);
+                document.getElementById('vel-linear-y').textContent = formatValue(data.velocity.linear_y, ' m/s', 3);
+                document.getElementById('vel-linear-z').textContent = formatValue(data.velocity.linear_z, ' m/s', 3);
+                document.getElementById('vel-angular-x').textContent = formatValue(data.velocity.angular_x, ' rad/s', 3);
+                document.getElementById('vel-angular-y').textContent = formatValue(data.velocity.angular_y, ' rad/s', 3);
+                document.getElementById('vel-angular-z').textContent = formatValue(data.velocity.angular_z, ' rad/s', 3);
+                document.getElementById('vel-magnitude').textContent = formatValue(data.velocity.magnitude, ' m/s', 3);
+                document.getElementById('vel-speed').textContent = formatValue(data.velocity.speed_kmh, ' km/h', 2);
+            }
+            
+            // Update accumulator data
+            if (data.accumulator) {
+                document.getElementById('acc-soc').textContent = formatValue(data.accumulator.soc, '%', 0);
+                document.getElementById('acc-voltage').textContent = formatValue(data.accumulator.voltage, 'V', 2);
+                document.getElementById('acc-current').textContent = formatValue(data.accumulator.current, 'A', 2);
+                document.getElementById('acc-temperature').textContent = formatValue(data.accumulator.temperature, '°C', 1);
+                document.getElementById('acc-status').innerHTML = formatStatus(data.accumulator.status);
+                document.getElementById('acc-capacity').textContent = formatValue(data.accumulator.capacity, 'Ah', 1);
+                
+                // Update cell segments
+                updateCellSegments(data);
+                
+                updateHeartbeat('acc-heartbeat', data.accumulator.heartbeat);
+            }
+            
+            // Update inverter data
+            if (data.inverters) {
+                for (let invNum = 1; invNum <= 4; invNum++) {
+                    const inv = data.inverters[invNum];
+                    if (inv) {
+                        const container = document.getElementById(`inverter-${invNum}`);
+                        if (container) {
+                            container.querySelector('.inv-status').innerHTML = formatInverterStatus(inv.status);
+                            container.querySelector('.inv-torque').textContent = formatValue(inv.torque, '', 3);
+                            container.querySelector('.inv-speed').textContent = formatValue(inv.speed, ' RPM', 0);
+                            container.querySelector('.inv-dc-voltage').textContent = formatValue(inv.dc_voltage, 'V', 1);
+                            container.querySelector('.inv-dc-current').textContent = formatValue(inv.dc_current, 'A', 1);
+                            container.querySelector('.inv-mos-temp').textContent = formatValue(inv.mos_temp, '°C', 1);
+                            container.querySelector('.inv-mcu-temp').textContent = formatValue(inv.mcu_temp, '°C', 1);
+                            container.querySelector('.inv-motor-temp').textContent = formatValue(inv.motor_temp, '°C', 1);
+                            container.querySelector('.inv-heartbeat').innerHTML = formatStatus(inv.heartbeat);
+                        }
+                        
+                        updateInverterHeartbeat(invNum, inv.heartbeat);
+                    }
+                }
+            }
+        }
+
+        // Initial data fetch
+        fetch('/api/data')
+            .then(response => response.json())
+            .then(data => updateDisplay(data))
+            .catch(error => console.error('Error fetching initial data:', error));
+    </script>
+</body>
+</html>

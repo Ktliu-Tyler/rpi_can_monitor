@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAN Data Monitor - NTURT Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .status-ok { @apply text-green-500 font-bold; }
+        .status-bad { @apply text-red-500 font-bold; }
+        .status-unknown { @apply text-gray-500; }
+        .data-card { @apply bg-white rounded-xl shadow-lg p-6 border-l-4 transition-all duration-300 hover:shadow-xl; }
+        .data-card.gps { @apply border-blue-500; }
+        .data-card.velocity { @apply border-green-500; }
+        .data-card.accumulator { @apply border-yellow-500; }
+        .data-card.inverter { @apply border-purple-500; }
+        .data-card.vcu { @apply border-indigo-500; }
+        .value-display { @apply font-mono text-sm; }
+        
+        /* Enhanced Heartbeat Indicators */
+        .heartbeat-indicator {
+            @apply inline-block w-4 h-4 rounded-full relative;
+            animation: pulse 2s infinite ease-in-out;
+        }
+        .heartbeat-ok { 
+            @apply bg-green-500;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 1);
+            animation: pulse-green 2s infinite;
+        }
+        .heartbeat-fail { 
+            @apply bg-red-500;
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 1);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        
+        .map-container {
+            height: 400px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* GPS Ripple Effect */
+        .ripple-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #60a5fa;
+            position: relative;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+        }
+        
+        .ripple-marker::before,
+        .ripple-marker::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            border: 2px solid #60a5fa;
+            transform: translate(-50%, -50%);
+            animation: ripple 2s infinite;
+        }
+        
+        .ripple-marker::after {
+            animation-delay: 1s;
+        }
+        
+        @keyframes ripple {
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 1;
+            }
+            100% {
+                width: 60px;
+                height: 60px;
+                opacity: 0;
+            }
+        }
+
+        /* Collapsible sections */
+        .collapsible {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .collapsible:hover {
+            background-color: #f3f4f6;
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        .collapsible-content.active {
+            max-height: 500px;
+        }
+
+        .segment-container {
+            border-left: 3px solid #e5e7eb;
+            padding-left: 12px;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+        }
+        .segment-container:nth-child(odd) {
+            border-left-color: #3b82f6;
+        }
+        .segment-container:nth-child(even) {
+            border-left-color: #10b981;
+        }
+
+        /* Dashboard specific styles */
+        .dashboard-gauge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dashboard-gauge::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+            animation: shine 3s infinite;
+        }
+
+        @keyframes shine {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .speed-display {
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, #06b6d4, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-align: center;
+        }
+
+        .vcu-control {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 12px;
+            padding: 16px;
+            color: white;
+            text-align: center;
+        }
+
+        .inverter-card {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .btn-primary {
+            @apply bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200;
+        }
+
+        .btn-secondary {
+            @apply bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200;
+        }
+
+        .btn-success {
+            @apply bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-lg p-6 mb-6 text-white">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold">NTURT Dashboard</h1>
+                    <p class="text-blue-100 text-lg">Real-time Vehicle Telemetry System</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-blue-100">CAN Messages</div>
+                    <div id="message-count" class="text-3xl font-bold">0</div>
+                    <div id="connection-status" class="text-sm text-green-300 flex items-center justify-end">
+                        <span class="heartbeat-indicator heartbeat-ok mr-2"></span>
+                        Connected
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Layout -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+            <!-- Speed & Primary Metrics -->
+            <div class="data-card">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Vehicle Speed</h2>
+                <div class="dashboard-gauge w-48 h-48 mx-auto mb-4">
+                    <div class="text-center z-10">
+                        <div id="dashboard-speed" class="text-4xl font-bold">0</div>
+                        <div class="text-sm opacity-80">km/h</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                        <div class="text-sm text-gray-600">SOC</div>
+                        <div id="dashboard-soc" class="text-2xl font-bold text-green-600">--</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Voltage</div>
+                        <div id="dashboard-voltage" class="text-2xl font-bold text-blue-600">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VCU Controls -->
+            <div class="data-card vcu">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-indigo-500 rounded-full mr-2"></span>
+                    VCU Controls
+                </h2>
+                <div class="space-y-4">
+                    <!-- Steering -->
+                    <div class="vcu-control">
+                        <div class="text-sm opacity-80">Steering</div>
+                        <div id="vcu-steer" class="text-xl font-bold">--</div>
+                    </div>
+                    
+                    <!-- Accelerator Bar -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium text-white">Accelerator</span>
+                            <span id="vcu-accel-value" class="text-sm font-bold text-white">0%</span>
+                        </div>
+                        <div class="w-full bg-white bg-opacity-30 rounded-full h-4">
+                            <div id="vcu-accel-bar" class="bg-green-400 h-4 rounded-full transition-all duration-300 flex items-center justify-center" style="width: 0%">
+                                <div class="text-xs font-bold text-white opacity-80"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Brake Bar -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm font-medium text-white">Brake</span>
+                            <span id="vcu-brake-value" class="text-sm font-bold text-white">0%</span>
+                        </div>
+                        <div class="w-full bg-white bg-opacity-30 rounded-full h-4">
+                            <div id="vcu-brake-bar" class="bg-red-400 h-4 rounded-full transition-all duration-300 flex items-center justify-center" style="width: 0%">
+                                <div class="text-xs font-bold text-white opacity-80"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional VCU Data -->
+                    <div class="grid grid-cols-2 gap-2 mt-4">
+                        <div class="bg-white bg-opacity-20 rounded p-2 text-center">
+                            <div class="text-xs opacity-80">APPS1</div>
+                            <div id="vcu-apps1" class="text-sm font-bold">--</div>
+                        </div>
+                        <div class="bg-white bg-opacity-20 rounded p-2 text-center">
+                            <div class="text-xs opacity-80">APPS2</div>
+                            <div id="vcu-apps2" class="text-sm font-bold">--</div>
+                        </div>
+                        <div class="bg-white bg-opacity-20 rounded p-2 text-center">
+                            <div class="text-xs opacity-80">BSE1</div>
+                            <div id="vcu-bse1" class="text-sm font-bold">--</div>
+                        </div>
+                        <div class="bg-white bg-opacity-20 rounded p-2 text-center">
+                            <div class="text-xs opacity-80">BSE2</div>
+                            <div id="vcu-bse2" class="text-sm font-bold">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status -->
+            <div class="data-card">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">System Status</h2>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <span>Accumulator</span>
+                        <span id="sys-acc-heartbeat" class="heartbeat-indicator heartbeat-fail"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span>Inverter FL</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="1"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span>Inverter FR</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="2"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span>Inverter RL</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="3"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span>Inverter RR</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="4"></span>
+                    </div>
+                </div>
+                <div class="mt-4 pt-4 border-t">
+                    <div class="text-sm text-gray-600">Temperature</div>
+                    <div id="dashboard-temp" class="text-lg font-bold text-orange-600">--°C</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPS Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- GPS Data -->
+            <div class="data-card gps">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-blue-500 rounded-full mr-2"></span>
+                    GPS Data
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-sm text-gray-600">Latitude</div>
+                        <div id="gps-lat" class="value-display text-lg">N/A</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Longitude</div>
+                        <div id="gps-lon" class="value-display text-lg">N/A</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Altitude</div>
+                        <div id="gps-alt" class="value-display text-lg">N/A</div>
+                    </div>
+                    <div>
+                        <div class="text-sm text-gray-600">Status</div>
+                        <div id="gps-status" class="value-display text-lg">N/A</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GPS Map -->
+            <div class="data-card gps">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-gray-800">Real-time Location</h2>
+                    <div class="flex gap-2">
+                        <button id="toggle-track-btn" class="btn-primary text-sm">Enable Track</button>
+                        <button id="clear-track-btn" class="btn-secondary text-sm">Clear Track</button>
+                    </div>
+                </div>
+                <div id="map" class="map-container"></div>
+            </div>
+        </div>
+
+        <!-- Detailed Velocity Data -->
+        <div class="data-card velocity mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <span class="w-4 h-4 bg-green-500 rounded-full mr-2"></span>
+                Velocity & Motion Data
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                    <div class="text-sm text-gray-600">Linear X</div>
+                    <div id="vel-linear-x" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Linear Y</div>
+                    <div id="vel-linear-y" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Linear Z</div>
+                    <div id="vel-linear-z" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Speed</div>
+                    <div id="vel-speed" class="value-display text-lg text-blue-600 font-bold">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Angular X</div>
+                    <div id="vel-angular-x" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Angular Y</div>
+                    <div id="vel-angular-y" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Angular Z</div>
+                    <div id="vel-angular-z" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Magnitude</div>
+                    <div id="vel-magnitude" class="value-display text-lg">N/A</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accumulator Section with Collapsible Details -->
+        <div class="data-card accumulator mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center">
+                    <span class="w-4 h-4 bg-yellow-500 rounded-full mr-2"></span>
+                    Accumulator Data
+                    <span id="acc-heartbeat" class="heartbeat-indicator heartbeat-fail ml-2"></span>
+                </h2>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+                <div>
+                    <div class="text-sm text-gray-600">SOC</div>
+                    <div id="acc-soc" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Voltage</div>
+                    <div id="acc-voltage" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Current</div>
+                    <div id="acc-current" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Temperature</div>
+                    <div id="acc-temperature" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Status</div>
+                    <div id="acc-status" class="value-display text-lg">N/A</div>
+                </div>
+                <div>
+                    <div class="text-sm text-gray-600">Capacity</div>
+                    <div id="acc-capacity" class="value-display text-lg">N/A</div>
+                </div>
+            </div>
+
+            <!-- Collapsible Cell Voltages -->
+            <div class="border-t pt-4">
+                <div class="collapsible bg-gray-50 p-3 rounded-lg mb-2" onclick="toggleCollapsible('cell-voltages')">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-gray-800">Cell Voltages (105 Cells)</h3>
+                        <svg id="cell-voltages-icon" class="w-5 h-5 transform transition-transform" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div id="cell-voltages-content" class="collapsible-content">
+                    <div id="acc-cell-voltages" class="space-y-2 bg-gray-50 p-4 rounded-lg">
+                        <!-- Voltage segments will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Collapsible Cell Temperatures -->
+            <div class="border-t pt-4 mt-4">
+                <div class="collapsible bg-gray-50 p-3 rounded-lg mb-2" onclick="toggleCollapsible('cell-temps')">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-gray-800">Cell Temperatures (224 Cells)</h3>
+                        <svg id="cell-temps-icon" class="w-5 h-5 transform transition-transform" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div id="cell-temps-content" class="collapsible-content">
+                    <div id="acc-cell-temps" class="space-y-2 bg-gray-50 p-4 rounded-lg">
+                        <!-- Temperature segments will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inverters Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Front Inverters -->
+            <div class="data-card inverter">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-purple-500 rounded-full mr-2"></span>
+                    Front Inverters (FL / FR)
+                </h2>
+                <div class="space-y-4">
+                    <div id="inverter-1" class="inverter-card">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-gray-800">FL (Front Left)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="1"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>Wheel Speed: <span class="inv-wheel-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                    <div id="inverter-2" class="inverter-card">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-gray-800">FR (Front Right)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="2"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>Wheel Speed: <span class="inv-wheel-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rear Inverters -->
+            <div class="data-card inverter">
+                <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                    <span class="w-4 h-4 bg-purple-500 rounded-full mr-2"></span>
+                    Rear Inverters (RL / RR)
+                </h2>
+                <div class="space-y-4">
+                    <div id="inverter-3" class="inverter-card">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-gray-800">RL (Rear Left)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="3"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>Wheel Speed: <span class="inv-wheel-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                    <div id="inverter-4" class="inverter-card">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="font-bold text-gray-800">RR (Rear Right)</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="4"></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-sm text-gray-700">
+                            <div class="col-span-2">Status: <span class="inv-status">N/A</span></div>
+                            <div>Torque: <span class="inv-torque">N/A</span></div>
+                            <div>Speed: <span class="inv-speed">N/A</span></div>
+                            <div>Wheel Speed: <span class="inv-wheel-speed">N/A</span></div>
+                            <div>DC Voltage: <span class="inv-dc-voltage">N/A</span></div>
+                            <div>DC Current: <span class="inv-dc-current">N/A</span></div>
+                            <div>MOS Temp: <span class="inv-mos-temp">N/A</span></div>
+                            <div>MCU Temp: <span class="inv-mcu-temp">N/A</span></div>
+                            <div>Motor Temp: <span class="inv-motor-temp">N/A</span></div>
+                            <div>Heartbeat: <span class="inv-heartbeat">N/A</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center text-gray-500">
+            <p class="mb-2">Last Update: <span id="last-update" class="font-mono">N/A</span></p>
+            <p class="text-sm">NTURT Racing Team - Enhanced CAN Data Monitor v2.0</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize WebSocket
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        
+        // Initialize Map
+        let map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        let vehicleMarker = null;
+        let pathPoints = [];
+        let pathPolyline = null;
+        let mapInitialized = false;
+        let trackingEnabled = false;
+
+        // GPS Tracking Controls
+        document.getElementById('toggle-track-btn').addEventListener('click', function() {
+            trackingEnabled = !trackingEnabled;
+            this.textContent = trackingEnabled ? 'Disable Track' : 'Enable Track';
+            this.className = trackingEnabled ? 'btn-secondary text-sm' : 'btn-primary text-sm';
+            
+            if (!trackingEnabled && pathPolyline) {
+                map.removeLayer(pathPolyline);
+                pathPolyline = null;
+            }
+        });
+
+        document.getElementById('clear-track-btn').addEventListener('click', function() {
+            pathPoints = [];
+            if (pathPolyline) {
+                map.removeLayer(pathPolyline);
+                pathPolyline = null;
+            }
+        });
+
+        // Collapsible functionality
+        function toggleCollapsible(id) {
+            const content = document.getElementById(id + '-content');
+            const icon = document.getElementById(id + '-icon');
+            
+            if (content.classList.contains('active')) {
+                content.classList.remove('active');
+                icon.style.transform = 'rotate(0deg)';
+            } else {
+                content.classList.add('active');
+                icon.style.transform = 'rotate(180deg)';
+            }
+        }
+
+        // Initialize collapsible sections with content
+        function initializeCollapsibleSections() {
+            // Initialize voltage segments
+            const voltageContainer = document.getElementById('acc-cell-voltages');
+            for (let i = 0; i < 7; i++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment-container';
+                segmentDiv.innerHTML = `
+                    <div class="text-xs text-gray-500 mb-1">Segment ${i} (Cells ${i*15}-${Math.min(i*15+14, 104)}) - Battery Pack ${i+1}</div>
+                    <div id="voltage-segment-${i}" class="value-display text-xs bg-white p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                `;
+                voltageContainer.appendChild(segmentDiv);
+            }
+
+            // Initialize temperature segments (224 cells, 7 segments of 32 each)
+            const tempContainer = document.getElementById('acc-cell-temps');
+            for (let i = 0; i < 7; i++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'segment-container';
+                segmentDiv.innerHTML = `
+                    <div class="text-xs text-gray-500 mb-1">Segment ${i} (Cells ${i*32}-${Math.min(i*32+31, 223)}) - Temperature Pack ${i+1}</div>
+                    <div id="temp-segment-${i}" class="value-display text-xs bg-white p-2 rounded max-h-24 overflow-y-auto">N/A</div>
+                `;
+                tempContainer.appendChild(segmentDiv);
+            }
+        }
+
+        // Connection status
+        ws.onopen = function() {
+            document.getElementById('connection-status').innerHTML = `
+                <span class="heartbeat-indicator heartbeat-ok mr-2"></span>
+                Connected
+            `;
+        };
+
+        ws.onclose = function() {
+            document.getElementById('connection-status').innerHTML = `
+                <span class="heartbeat-indicator heartbeat-fail mr-2"></span>
+                Disconnected
+            `;
+        };
+
+        ws.onerror = function() {
+            document.getElementById('connection-status').innerHTML = `
+                <span class="heartbeat-indicator heartbeat-fail mr-2"></span>
+                Error
+            `;
+        };
+
+        // Data update handler
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            updateDisplay(data);
+        };
+
+        function formatValue(value, suffix = '', decimals = 2) {
+            if (value === null || value === undefined) {
+                return 'N/A';
+            }
+            if (typeof value === 'number') {
+                return value.toFixed(decimals) + suffix;
+            }
+            return value.toString() + suffix;
+        }
+
+        function formatStatus(status) {
+            if (status === null || status === undefined) {
+                return '<span class="status-unknown">N/A</span>';
+            }
+            if (status === 1 || status === true) {
+                return '<span class="status-ok">OK</span>';
+            }
+            return '<span class="status-bad">FAIL</span>';
+        }
+
+        function formatInverterStatus(status) {
+            if (status === null || status === undefined) {
+                return '<span class="status-unknown">N/A</span>';
+            }
+            
+            const statusHex = `0x${status.toString(16).toUpperCase().padStart(4, '0')}`;
+            let statusText = '';
+            let statusClass = 'status-unknown';
+            
+            switch (status) {
+                case 0x00:
+                    statusText = 'Boot up (Initialising)';
+                    statusClass = 'status-unknown';
+                    break;
+                case 0x04:
+                    statusText = 'Stopped';
+                    statusClass = 'status-bad';
+                    break;
+                case 0x05:
+                    statusText = 'Operational';
+                    statusClass = 'status-ok';
+                    break;
+                case 0x7f:
+                    statusText = 'Pre-operational';
+                    statusClass = 'status-unknown';
+                    break;
+                default:
+                    statusText = 'Unknown';
+                    statusClass = 'status-unknown';
+                    break;
+            }
+            
+            return `<span class="${statusClass}">${statusHex} - ${statusText}</span>`;
+        }
+
+        function formatCellSegments(cellArray, suffix = '', cellsPerSegment = 15) {
+            if (!cellArray || !Array.isArray(cellArray)) {
+                return Array(7).fill('N/A');
+            }
+            
+            const segments = [];
+            const totalCells = cellArray.length;
+            const numSegments = 7;
+            
+            for (let segment = 0; segment < numSegments; segment++) {
+                const startIndex = segment * cellsPerSegment;
+                const endIndex = Math.min(startIndex + cellsPerSegment, totalCells);
+                const segmentData = cellArray.slice(startIndex, endIndex);
+                
+                const formattedValues = [];
+                for (let i = 0; i < cellsPerSegment && (startIndex + i) < totalCells; i++) {
+                    const value = segmentData[i];
+                    if (value !== null && value !== undefined) {
+                        formattedValues.push(`Cell${startIndex + i}: ${value.toFixed(2)}${suffix}`);
+                    } else {
+                        formattedValues.push(`Cell${startIndex + i}: N/A`);
+                    }
+                }
+                
+                segments.push(formattedValues.join(', '));
+            }
+            
+            return segments;
+        }
+
+        function updateCellSegments(data) {
+            // Update voltage segments (105 cells, 15 per segment)
+            if (data.accumulator && data.accumulator.cell_voltages) {
+                const voltageSegments = formatCellSegments(data.accumulator.cell_voltages, 'V', 15);
+                for (let i = 0; i < 7; i++) {
+                    const element = document.getElementById(`voltage-segment-${i}`);
+                    if (element) {
+                        element.textContent = voltageSegments[i];
+                    }
+                }
+            }
+            
+            // Update temperature segments (224 cells, 32 per segment)
+            if (data.accumulator && data.accumulator.cell_temperatures) {
+                const tempSegments = formatCellSegments(data.accumulator.cell_temperatures, '°C', 32);
+                for (let i = 0; i < 7; i++) {
+                    const element = document.getElementById(`temp-segment-${i}`);
+                    if (element) {
+                        element.textContent = tempSegments[i];
+                    }
+                }
+            }
+        }
+
+        // RPM to km/h conversion function
+        function rpmToKmh(rpm) {
+            if (rpm === null || rpm === undefined || isNaN(rpm)) {
+                return null;
+            }
+            // 20 inch wheel diameter = 20 * 2.54 cm = 50.8 cm = 0.508 m
+            // Circumference = π * diameter = π * 0.508 = 1.597 m
+            // Gear ratio = 2.54:1
+            // Wheel RPM = Motor RPM / 2.54
+            // Speed (m/s) = (Wheel RPM / 60) * circumference
+            // Speed (km/h) = Speed (m/s) * 3.6
+            
+            const wheelDiameter = 0.508; // 20 inch in meters
+            const gearRatio = 2.54;
+            const circumference = Math.PI * wheelDiameter;
+            
+            const wheelRpm = Math.abs(rpm) / gearRatio;
+            const speedMs = (wheelRpm / 60) * circumference;
+            const speedKmh = speedMs * 3.6;
+            
+            return speedKmh;
+        }
+
+        // Update progress bar
+        function updateProgressBar(barId, valueId, value, maxValue = 100) {
+            const bar = document.getElementById(barId);
+            const valueSpan = document.getElementById(valueId);
+            
+            if (!bar || !valueSpan) return;
+            
+            let percentage = 0;
+            if (value !== null && value !== undefined && !isNaN(value)) {
+                percentage = Math.min(Math.max(value, 0), maxValue);
+                valueSpan.textContent = `${Math.round(percentage)}%`;
+                bar.style.width = `${(percentage / maxValue) * 100}%`;
+            } else {
+                valueSpan.textContent = '0%';
+                bar.style.width = '0%';
+            }
+        }
+
+        function updateHeartbeat(elementId, status) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            if (status === true) {
+                element.className = 'heartbeat-indicator heartbeat-ok';
+            } else {
+                element.className = 'heartbeat-indicator heartbeat-fail';
+            }
+        }
+
+        function updateInverterHeartbeat(invNum, status) {
+            const element = document.querySelector(`[data-inv="${invNum}"]`);
+            if (!element) return;
+            
+            if (status === true) {
+                element.className = 'heartbeat-indicator heartbeat-ok';
+            } else {
+                element.className = 'heartbeat-indicator heartbeat-fail';
+            }
+        }
+
+        function updateGPSMap(lat, lon) {
+            if (lat !== null && lon !== null && lat !== undefined && lon !== undefined && 
+                !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                const latLng = [lat, lon];
+                
+                if (!mapInitialized) {
+                    map.setView(latLng, 15);
+                    mapInitialized = true;
+                }
+                
+                if (vehicleMarker) {
+                    vehicleMarker.setLatLng(latLng);
+                } else {
+                    const rippleIcon = L.divIcon({
+                        className: 'ripple-marker',
+                        html: '',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+                    
+                    vehicleMarker = L.marker(latLng, { icon: rippleIcon }).addTo(map)
+                        .bindPopup('Vehicle Position');
+                }
+                
+                // Update tracking path
+                if (trackingEnabled) {
+                    pathPoints.push(latLng);
+                    if (pathPolyline) {
+                        map.removeLayer(pathPolyline);
+                    }
+                    pathPolyline = L.polyline(pathPoints, {
+                        color: 'red',
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(map);
+                }
+                
+                if (map.getZoom() >= 10) {
+                    map.setView(latLng, map.getZoom());
+                }
+            }
+        }
+
+        function updateDisplay(data) {
+            // Update message count
+            document.getElementById('message-count').textContent = data.message_count || 0;
+            
+            // Update last update time
+            if (data.update_time) {
+                const updateTime = new Date(data.update_time);
+                document.getElementById('last-update').textContent = updateTime.toLocaleString();
+            }
+            
+            // Update dashboard speed display
+            if (data.velocity && data.velocity.speed_kmh !== null) {
+                document.getElementById('dashboard-speed').textContent = Math.round(data.velocity.speed_kmh || 0);
+            }
+            
+            // Update dashboard SOC and voltage
+            if (data.accumulator) {
+                document.getElementById('dashboard-soc').textContent = 
+                    data.accumulator.soc !== null ? data.accumulator.soc + '%' : '--';
+                document.getElementById('dashboard-voltage').textContent = 
+                    data.accumulator.voltage !== null ? formatValue(data.accumulator.voltage, 'V', 1) : '--';
+                document.getElementById('dashboard-temp').textContent = 
+                    data.accumulator.temperature !== null ? formatValue(data.accumulator.temperature, '°C', 1) : '--°C';
+            }
+            
+            // Update VCU data
+            if (data.vcu) {
+                document.getElementById('vcu-steer').textContent = formatValue(data.vcu.steer, '°', 1);
+                
+                // Update accelerator progress bar
+                updateProgressBar('vcu-accel-bar', 'vcu-accel-value', data.vcu.accel, 100);
+                
+                // Update brake progress bar  
+                updateProgressBar('vcu-brake-bar', 'vcu-brake-value', data.vcu.brake, 100);
+                
+                document.getElementById('vcu-apps1').textContent = formatValue(data.vcu.apps1, '', 0);
+                document.getElementById('vcu-apps2').textContent = formatValue(data.vcu.apps2, '', 0);
+                document.getElementById('vcu-bse1').textContent = formatValue(data.vcu.bse1, '', 0);
+                document.getElementById('vcu-bse2').textContent = formatValue(data.vcu.bse2, '', 0);
+            }
+            
+            // Update GPS data
+            if (data.gps) {
+                document.getElementById('gps-lat').textContent = formatValue(data.gps.lat, '°', 7);
+                document.getElementById('gps-lon').textContent = formatValue(data.gps.lon, '°', 7);
+                document.getElementById('gps-alt').textContent = formatValue(data.gps.alt, 'm', 1);
+                document.getElementById('gps-status').innerHTML = data.gps.status !== null ? 
+                    `0x${data.gps.status.toString(16).toUpperCase().padStart(2, '0')}` : 'N/A';
+                
+                updateGPSMap(data.gps.lat, data.gps.lon);
+            }
+            
+            // Update velocity data
+            if (data.velocity) {
+                document.getElementById('vel-linear-x').textContent = formatValue(data.velocity.linear_x, ' m/s', 3);
+                document.getElementById('vel-linear-y').textContent = formatValue(data.velocity.linear_y, ' m/s', 3);
+                document.getElementById('vel-linear-z').textContent = formatValue(data.velocity.linear_z, ' m/s', 3);
+                document.getElementById('vel-angular-x').textContent = formatValue(data.velocity.angular_x, ' rad/s', 3);
+                document.getElementById('vel-angular-y').textContent = formatValue(data.velocity.angular_y, ' rad/s', 3);
+                document.getElementById('vel-angular-z').textContent = formatValue(data.velocity.angular_z, ' rad/s', 3);
+                document.getElementById('vel-magnitude').textContent = formatValue(data.velocity.magnitude, ' m/s', 3);
+                document.getElementById('vel-speed').textContent = formatValue(data.velocity.speed_kmh, ' km/h', 2);
+            }
+            
+            // Update accumulator data
+            if (data.accumulator) {
+                document.getElementById('acc-soc').textContent = formatValue(data.accumulator.soc, '%', 0);
+                document.getElementById('acc-voltage').textContent = formatValue(data.accumulator.voltage, 'V', 2);
+                document.getElementById('acc-current').textContent = formatValue(data.accumulator.current, 'A', 2);
+                document.getElementById('acc-temperature').textContent = formatValue(data.accumulator.temperature, '°C', 1);
+                document.getElementById('acc-status').innerHTML = formatStatus(data.accumulator.status);
+                document.getElementById('acc-capacity').textContent = formatValue(data.accumulator.capacity, 'Ah', 1);
+                
+                updateCellSegments(data);
+                updateHeartbeat('acc-heartbeat', data.accumulator.heartbeat);
+                updateHeartbeat('sys-acc-heartbeat', data.accumulator.heartbeat);
+            }
+            
+            // Update inverter data
+            if (data.inverters) {
+                for (let invNum = 1; invNum <= 4; invNum++) {
+                    const inv = data.inverters[invNum];
+                    if (inv) {
+                        const container = document.getElementById(`inverter-${invNum}`);
+                        if (container) {
+                            container.querySelector('.inv-status').innerHTML = formatInverterStatus(inv.status);
+                            container.querySelector('.inv-torque').textContent = formatValue(inv.torque, '', 3);
+                            container.querySelector('.inv-speed').textContent = formatValue(inv.speed, ' RPM', 0);
+                            
+                            // Calculate and display wheel speed from RPM
+                            const wheelSpeed = rpmToKmh(inv.speed);
+                            container.querySelector('.inv-wheel-speed').textContent = 
+                                wheelSpeed !== null ? formatValue(wheelSpeed, ' km/h', 1) : 'N/A';
+                            
+                            container.querySelector('.inv-dc-voltage').textContent = formatValue(inv.dc_voltage, 'V', 1);
+                            container.querySelector('.inv-dc-current').textContent = formatValue(inv.dc_current, 'A', 1);
+                            container.querySelector('.inv-mos-temp').textContent = formatValue(inv.mos_temp, '°C', 1);
+                            container.querySelector('.inv-mcu-temp').textContent = formatValue(inv.mcu_temp, '°C', 1);
+                            container.querySelector('.inv-motor-temp').textContent = formatValue(inv.motor_temp, '°C', 1);
+                            container.querySelector('.inv-heartbeat').innerHTML = formatStatus(inv.heartbeat);
+                        }
+                        
+                        updateInverterHeartbeat(invNum, inv.heartbeat);
+                    }
+                }
+            }
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCollapsibleSections();
+            
+            // Initial data fetch
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => updateDisplay(data))
+                .catch(error => console.error('Error fetching initial data:', error));
+        });
+    </script>
+</body>
+</html>

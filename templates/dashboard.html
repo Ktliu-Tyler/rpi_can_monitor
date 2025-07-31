@@ -1,0 +1,1441 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTURT Dashboard - Dark Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 移除有問題的gauge庫，使用簡單的CSS實現 -->
+    <style>
+        /* Dark Theme Customization */
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+        }
+        
+        .glass-card {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            transition: all 0.4s ease;
+            cursor: pointer;
+        }
+        
+        .glass-card:hover {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            box-shadow: 
+                0 10px 30px rgba(59, 130, 246, 0.2),
+                0 0 30px rgba(59, 130, 246, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: translateY(-5px) scale(1.02);
+        }
+        
+        .neon-border {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+        }
+        
+        .status-ok { color: #10b981; font-weight: bold; text-shadow: 0 0 10px #10b981; }
+        .status-bad { color: #ef4444; font-weight: bold; text-shadow: 0 0 10px #ef4444; }
+        .status-unknown { color: #6b7280; }
+        
+        .gauge-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+        }
+        
+        .circular-gauge {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: conic-gradient(from 270deg, #3b82f6 0deg, #3b82f6 var(--gauge-angle), #1f2937 var(--gauge-angle), #1f2937 360deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 4px solid #1f2937;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+        
+        .gauge-inner {
+            width: 160px;
+            height: 160px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .mini-gauge {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+        }
+        
+        .mini-circular-gauge {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(from 270deg, #10b981 0deg, #10b981 var(--gauge-angle), #1f2937 var(--gauge-angle), #1f2937 360deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #1f2937;
+        }
+        
+        .mini-gauge-inner {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .heartbeat-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .heartbeat-ok { 
+            background: #10b981; 
+            box-shadow: 0 0 10px #10b981;
+        }
+        
+        .heartbeat-fail { 
+            background: #ef4444; 
+            box-shadow: 0 0 10px #ef4444;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            .data-grid {
+                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 8px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .chart-container:hover {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #3b82f6;
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+            transform: translateY(-5px);
+        }
+        
+        .slider-container {
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .slider-container:hover {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #10b981;
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.2);
+            transform: translateY(-3px);
+        }
+        
+        .cell-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #374151;
+            outline: none;
+            margin: 0.25rem 0;
+            transition: all 0.3s ease;
+        }
+        
+        .cell-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+            transition: all 0.3s ease;
+        }
+        
+        .cell-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+        }
+        
+        /* Battery status colors */
+        .battery-excellent {
+            background: linear-gradient(90deg, #10b981, #34d399);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+        
+        .battery-good {
+            background: linear-gradient(90deg, #22c55e, #4ade80);
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+        }
+        
+        .battery-medium {
+            background: linear-gradient(90deg, #eab308, #facc15);
+            box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);
+        }
+        
+        .battery-low {
+            background: linear-gradient(90deg, #f97316, #fb923c);
+            box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+        }
+        
+        .battery-critical {
+            background: linear-gradient(90deg, #ef4444, #f87171);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+            animation: batteryAlert 2s infinite;
+        }
+        
+        @keyframes batteryAlert {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        /* Cell voltage slider color based on voltage */
+        .cell-voltage-critical {
+            background: linear-gradient(90deg, #ef4444, #374151);
+        }
+        
+        .cell-voltage-low {
+            background: linear-gradient(90deg, #f97316, #374151);
+        }
+        
+        .cell-voltage-normal {
+            background: linear-gradient(90deg, #10b981, #374151);
+        }
+        
+        .cell-voltage-high {
+            background: linear-gradient(90deg, #3b82f6, #374151);
+        }
+        
+        /* Cell temperature slider color based on temperature */
+        .cell-temp-critical {
+            background: linear-gradient(90deg, #ef4444, #374151);
+        }
+        
+        .cell-temp-high {
+            background: linear-gradient(90deg, #f97316, #374151);
+        }
+        
+        .cell-temp-warm {
+            background: linear-gradient(90deg, #eab308, #374151);
+        }
+        
+        .cell-temp-normal {
+            background: linear-gradient(90deg, #10b981, #374151);
+        }
+        
+        .cell-temp-cool {
+            background: linear-gradient(90deg, #3b82f6, #374151);
+        }
+        
+        .map-dark {
+            filter: invert(1) hue-rotate(180deg);
+            border-radius: 8px;
+        }
+        
+        /* GPS Ripple Effect for Dark Theme */
+        .ripple-marker-dark {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #60a5fa;
+            position: relative;
+            box-shadow: 0 0 15px rgba(96, 165, 250, 0.8);
+            filter: invert(1) hue-rotate(180deg);
+        }
+        
+        .ripple-marker-dark::before,
+        .ripple-marker-dark::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            border: 2px solid #60a5fa;
+            transform: translate(-50%, -50%);
+            animation: ripple-dark 2s infinite;
+        }
+        
+        .ripple-marker-dark::after {
+            animation-delay: 1s;
+        }
+        
+        @keyframes ripple-dark {
+            0% {
+                width: 0;
+                height: 0;
+                opacity: 1;
+            }
+            100% {
+                width: 60px;
+                height: 60px;
+                opacity: 0;
+            }
+        }
+        
+        .connection-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: bold;
+        }
+        
+        .connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+        
+        .disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-indicator disconnected">
+        <span id="connection-text">Connecting...</span>
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="glass-card neon-border rounded-lg p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                        NTURT Dashboard
+                    </h1>
+                    <p class="text-slate-400 mt-2">Real-time Vehicle Telemetry System</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-slate-400">Messages</div>
+                    <div id="message-count" class="text-3xl font-bold text-cyan-400">0</div>
+                    <div class="text-xs text-slate-500" id="last-update">Waiting for data...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Speed Gauges Row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <!-- Main Speed Gauge -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold text-center mb-4 text-cyan-400">Vehicle Speed</h3>
+                <div class="gauge-container">
+                    <div class="circular-gauge" id="speed-gauge-container">
+                        <div class="gauge-inner">
+                            <div id="speed-value" class="text-2xl font-bold text-white">0</div>
+                            <div class="text-sm text-slate-400">km/h</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RPM Gauges -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold text-center mb-4 text-green-400">Motor RPM</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="text-center">
+                        <div class="mini-gauge mx-auto">
+                            <div class="mini-circular-gauge" id="rpm-fl-gauge">
+                                <div class="mini-gauge-inner">
+                                    <div id="rpm-fl-value" class="text-lg font-bold text-green-400">0</div>
+                                    <div class="text-xs text-slate-400">RPM</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-300 mt-2 font-medium">FL</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="mini-gauge mx-auto">
+                            <div class="mini-circular-gauge" id="rpm-fr-gauge">
+                                <div class="mini-gauge-inner">
+                                    <div id="rpm-fr-value" class="text-lg font-bold text-green-400">0</div>
+                                    <div class="text-xs text-slate-400">RPM</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-300 mt-2 font-medium">FR</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="mini-gauge mx-auto">
+                            <div class="mini-circular-gauge" id="rpm-rl-gauge">
+                                <div class="mini-gauge-inner">
+                                    <div id="rpm-rl-value" class="text-lg font-bold text-green-400">0</div>
+                                    <div class="text-xs text-slate-400">RPM</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-300 mt-2 font-medium">RL</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="mini-gauge mx-auto">
+                            <div class="mini-circular-gauge" id="rpm-rr-gauge">
+                                <div class="mini-gauge-inner">
+                                    <div id="rpm-rr-value" class="text-lg font-bold text-green-400">0</div>
+                                    <div class="text-xs text-slate-400">RPM</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-sm text-slate-300 mt-2 font-medium">RR</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Battery SOC Gauge -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold text-center mb-4 text-yellow-400">Battery SOC</h3>
+                <div class="gauge-container">
+                    <div class="circular-gauge" id="soc-gauge-container">
+                        <div class="gauge-inner">
+                            <div id="soc-value" class="text-2xl font-bold text-white">0</div>
+                            <div class="text-sm text-slate-400">%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Power Chart -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 text-purple-400">Power & Current</h3>
+                <div class="chart-container">
+                    <canvas id="power-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Temperature Chart -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 text-red-400">Temperature Monitoring</h3>
+                <div class="chart-container">
+                    <canvas id="temp-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPS Row - Full Width -->
+        <div class="mb-6">
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+                    GPS Data
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Latitude:</span>
+                            <span id="gps-lat" class="font-mono text-blue-400">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Longitude:</span>
+                            <span id="gps-lon" class="font-mono text-blue-400">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Altitude:</span>
+                            <span id="gps-alt" class="font-mono text-blue-400">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Status:</span>
+                            <span id="gps-status" class="font-mono">N/A</span>
+                        </div>
+                    </div>
+                    <div id="map" class="w-full h-64 map-dark"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Grid -->
+        <div class="data-grid mb-6">
+            <!-- Accumulator Data -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <span class="w-3 h-3 bg-yellow-500 rounded-full mr-2"></span>
+                    Accumulator
+                    <span id="acc-heartbeat" class="heartbeat-indicator heartbeat-fail ml-2"></span>
+                </h3>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Voltage:</span>
+                        <span id="acc-voltage" class="font-mono text-yellow-400">N/A</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Current:</span>
+                        <span id="acc-current" class="font-mono text-yellow-400">N/A</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Temperature:</span>
+                        <span id="acc-temperature" class="font-mono text-yellow-400">N/A</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Status:</span>
+                        <span id="acc-status" class="font-mono">N/A</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Capacity:</span>
+                        <span id="acc-capacity" class="font-mono text-yellow-400">N/A</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inverters Status -->
+            <div class="glass-card rounded-lg p-6 md:col-span-2">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>
+                    Inverters Status
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- FL Inverter -->
+                    <div class="bg-slate-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-bold text-purple-400">FL</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="1"></span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Status:</span>
+                                <span class="inv-status text-xs">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Torque:</span>
+                                <span class="inv-torque font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC V:</span>
+                                <span class="inv-dc-voltage font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC I:</span>
+                                <span class="inv-dc-current font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MOS T:</span>
+                                <span class="inv-mos-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MCU T:</span>
+                                <span class="inv-mcu-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Motor T:</span>
+                                <span class="inv-motor-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">HB:</span>
+                                <span class="inv-heartbeat">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FR Inverter -->
+                    <div class="bg-slate-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-bold text-purple-400">FR</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="2"></span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Status:</span>
+                                <span class="inv-status text-xs">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Torque:</span>
+                                <span class="inv-torque font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC V:</span>
+                                <span class="inv-dc-voltage font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC I:</span>
+                                <span class="inv-dc-current font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MOS T:</span>
+                                <span class="inv-mos-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MCU T:</span>
+                                <span class="inv-mcu-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Motor T:</span>
+                                <span class="inv-motor-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">HB:</span>
+                                <span class="inv-heartbeat">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RL Inverter -->
+                    <div class="bg-slate-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-bold text-purple-400">RL</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="3"></span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Status:</span>
+                                <span class="inv-status text-xs">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Torque:</span>
+                                <span class="inv-torque font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC V:</span>
+                                <span class="inv-dc-voltage font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC I:</span>
+                                <span class="inv-dc-current font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MOS T:</span>
+                                <span class="inv-mos-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MCU T:</span>
+                                <span class="inv-mcu-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Motor T:</span>
+                                <span class="inv-motor-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">HB:</span>
+                                <span class="inv-heartbeat">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RR Inverter -->
+                    <div class="bg-slate-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-bold text-purple-400">RR</span>
+                            <span class="heartbeat-indicator heartbeat-fail" data-inv="4"></span>
+                        </div>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Status:</span>
+                                <span class="inv-status text-xs">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Torque:</span>
+                                <span class="inv-torque font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC V:</span>
+                                <span class="inv-dc-voltage font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">DC I:</span>
+                                <span class="inv-dc-current font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MOS T:</span>
+                                <span class="inv-mos-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">MCU T:</span>
+                                <span class="inv-mcu-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">Motor T:</span>
+                                <span class="inv-motor-temp font-mono">N/A</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-slate-400">HB:</span>
+                                <span class="inv-heartbeat">N/A</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battery Cell Sliders - Bottom Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Voltage Sliders -->
+            <div class="glass-card rounded-lg p-4">
+                <h3 class="text-lg font-bold mb-3 text-blue-400">Cell Voltages</h3>
+                <div id="voltage-sliders" class="space-y-2">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Temperature Sliders -->
+            <div class="glass-card rounded-lg p-4">
+                <h3 class="text-lg font-bold mb-3 text-orange-400">Cell Temperatures</h3>
+                <div id="temperature-sliders" class="space-y-2">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="glass-card rounded-lg p-4 text-center">
+            <p class="text-slate-400">NTURT Racing Team - Dashboard v2.0 Dark Edition</p>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let ws;
+        let map;
+        let vehicleMarker = null;
+        let pathPoints = [];
+        let pathPolyline = null;
+        let mapInitialized = false; // Track if we've received first GPS data
+        
+        // Chart variables
+        let powerChart, tempChart;
+        
+        // Data storage for charts
+        let chartData = {
+            power: { labels: [], voltage: [], current: [] },
+            temperature: { labels: [], acc: [], mos: [], mcu: [], motor: [] }
+        };
+
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSocket();
+            initializeMap();
+            initializeCharts();
+            initializeCellSliders();
+            console.log('Dashboard initialized');
+        });
+
+        function initializeWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+            
+            ws.onopen = function() {
+                updateConnectionStatus(true);
+            };
+
+            ws.onclose = function() {
+                updateConnectionStatus(false);
+                // Attempt to reconnect after 3 seconds
+                setTimeout(initializeWebSocket, 3000);
+            };
+
+            ws.onerror = function() {
+                updateConnectionStatus(false);
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                updateDisplay(data);
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connection-status');
+            const text = document.getElementById('connection-text');
+            
+            if (connected) {
+                indicator.className = 'connection-indicator connected';
+                text.textContent = 'Connected';
+            } else {
+                indicator.className = 'connection-indicator disconnected';
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        function initializeMap() {
+            map = L.map('map').setView([0, 0], 2); // Start with world view
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+        }
+
+        function initializeCharts() {
+            try {
+                // Power Chart
+                const powerCtx = document.getElementById('power-chart').getContext('2d');
+                powerChart = new Chart(powerCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Voltage (V)',
+                            data: [],
+                            borderColor: '#fbbf24',
+                            backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y'
+                        }, {
+                            label: 'Current (A)',
+                            data: [],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#e2e8f0' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                ticks: { color: '#fbbf24' },
+                                grid: { color: 'rgba(251, 191, 36, 0.1)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                ticks: { color: '#3b82f6' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+
+                // Temperature Chart
+                const tempCtx = document.getElementById('temp-chart').getContext('2d');
+                tempChart = new Chart(tempCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Accumulator Temp (°C)',
+                            data: [],
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4
+                        }, {
+                            label: 'Average MOS Temp (°C)',
+                            data: [],
+                            borderColor: '#f97316',
+                            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+                            tension: 0.4
+                        }, {
+                            label: 'Average MCU Temp (°C)',
+                            data: [],
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            tension: 0.4
+                        }, {
+                            label: 'Average Motor Temp (°C)',
+                            data: [],
+                            borderColor: '#06b6d4',
+                            backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#e2e8f0' }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                            },
+                            y: {
+                                ticks: { color: '#94a3b8' },
+                                grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                            }
+                        }
+                    }
+                });
+                console.log('Charts initialized');
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        }
+
+        // CSS Gauge update functions
+        function updateSpeedGauge(speed) {
+            const percentage = Math.min(speed / 200, 1);
+            const angle = percentage * 270; // 270 degrees for 3/4 circle
+            const speedGauge = document.getElementById('speed-gauge-container');
+            speedGauge.style.setProperty('--gauge-angle', angle + 'deg');
+        }
+
+        function updateSOCGauge(soc) {
+            const percentage = soc / 100;
+            const angle = percentage * 270;
+            const socGauge = document.getElementById('soc-gauge-container');
+            const socValue = document.getElementById('soc-value');
+            
+            socGauge.style.setProperty('--gauge-angle', angle + 'deg');
+            
+            // Remove all battery status classes
+            socGauge.className = 'circular-gauge';
+            
+            // Add battery status class based on SOC level
+            if (soc >= 80) {
+                socGauge.classList.add('battery-excellent');
+            } else if (soc >= 60) {
+                socGauge.classList.add('battery-good');
+            } else if (soc >= 40) {
+                socGauge.classList.add('battery-medium');
+            } else if (soc >= 20) {
+                socGauge.classList.add('battery-low');
+            } else {
+                socGauge.classList.add('battery-critical');
+            }
+            
+            // Update text color based on battery level
+            if (soc <= 20) {
+                socValue.className = 'text-2xl font-bold text-red-400';
+            } else if (soc <= 40) {
+                socValue.className = 'text-2xl font-bold text-orange-400';
+            } else if (soc <= 60) {
+                socValue.className = 'text-2xl font-bold text-yellow-400';
+            } else {
+                socValue.className = 'text-2xl font-bold text-green-400';
+            }
+        }
+
+        function updateRPMGauge(element, rpm) {
+            const percentage = Math.min(rpm / 5000, 1);
+            const angle = percentage * 270;
+            element.style.setProperty('--gauge-angle', angle + 'deg');
+        }
+
+        function initializeCellSliders() {
+            const voltageContainer = document.getElementById('voltage-sliders');
+            const tempContainer = document.getElementById('temperature-sliders');
+
+            // Create voltage sliders for 7 segments - compact version
+            for (let i = 0; i < 7; i++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'slider-container';
+                segmentDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-blue-400 font-medium text-sm">Pack ${i + 1}</span>
+                        <span id="voltage-pack-${i}-value" class="text-blue-300 font-mono text-xs">N/A</span>
+                    </div>
+                    <input type="range" id="voltage-pack-${i}" class="cell-slider" min="2.5" max="4.2" step="0.01" value="3.7" disabled>
+                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                        <span>2.5V</span>
+                        <span>4.2V</span>
+                    </div>
+                `;
+                voltageContainer.appendChild(segmentDiv);
+            }
+
+            // Create temperature sliders for 7 segments - compact version
+            for (let i = 0; i < 7; i++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'slider-container';
+                segmentDiv.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-orange-400 font-medium text-sm">Pack ${i + 1}</span>
+                        <span id="temp-pack-${i}-value" class="text-orange-300 font-mono text-xs">N/A</span>
+                    </div>
+                    <input type="range" id="temp-pack-${i}" class="cell-slider" min="0" max="80" step="0.1" value="25" disabled>
+                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                        <span>0°C</span>
+                        <span>80°C</span>
+                    </div>
+                `;
+                tempContainer.appendChild(segmentDiv);
+            }
+        }
+
+        function updateDisplay(data) {
+            try {
+                console.log('Updating display with data:', data);
+                
+                // Update message count and timestamp
+                document.getElementById('message-count').textContent = data.message_count || 0;
+                if (data.update_time) {
+                    const updateTime = new Date(data.update_time);
+                    document.getElementById('last-update').textContent = updateTime.toLocaleString();
+                }
+
+                // Update GPS data
+                if (data.gps) {
+                    document.getElementById('gps-lat').textContent = formatValue(data.gps.lat, '°', 7);
+                    document.getElementById('gps-lon').textContent = formatValue(data.gps.lon, '°', 7);
+                    document.getElementById('gps-alt').textContent = formatValue(data.gps.alt, 'm', 1);
+                    document.getElementById('gps-status').innerHTML = data.gps.status !== null ? 
+                        `0x${data.gps.status.toString(16).toUpperCase().padStart(2, '0')}` : 'N/A';
+                    
+                    updateGPSMap(data.gps.lat, data.gps.lon);
+                }
+
+                // Update speed gauge and velocity
+                if (data.velocity) {
+                    const speed = data.velocity.speed_kmh || 0;
+                    updateSpeedGauge(speed);
+                    document.getElementById('speed-value').textContent = speed.toFixed(1);
+                }
+
+                // Update accumulator data
+                if (data.accumulator) {
+                    document.getElementById('acc-voltage').textContent = formatValue(data.accumulator.voltage, 'V', 2);
+                    document.getElementById('acc-current').textContent = formatValue(data.accumulator.current, 'A', 2);
+                    document.getElementById('acc-temperature').textContent = formatValue(data.accumulator.temperature, '°C', 1);
+                    document.getElementById('acc-status').innerHTML = formatStatus(data.accumulator.status);
+                    document.getElementById('acc-capacity').textContent = formatValue(data.accumulator.capacity, 'Ah', 1);
+                    
+                    // Update SOC gauge
+                    const soc = data.accumulator.soc || 0;
+                    updateSOCGauge(soc);
+                    document.getElementById('soc-value').textContent = soc.toFixed(0);
+
+                    // Update cell sliders
+                    updateCellSliders(data.accumulator);
+
+                    // Update heartbeat
+                    updateHeartbeat('acc-heartbeat', data.accumulator.heartbeat);
+
+                    // Update charts
+                    updateCharts(data.accumulator);
+                }
+
+                // Update inverter data
+                if (data.inverters) {
+                    updateInverters(data.inverters);
+                }
+            } catch (error) {
+                console.error('Error updating display:', error);
+            }
+        }
+
+        function updateCellSliders(accumulator) {
+            // Update voltage sliders
+            if (accumulator.cell_voltages) {
+                for (let segment = 0; segment < 7; segment++) {
+                    const startIndex = segment * 15;
+                    const endIndex = Math.min(startIndex + 15, 105);
+                    const segmentData = accumulator.cell_voltages.slice(startIndex, endIndex);
+                    
+                    const validValues = segmentData.filter(v => v !== null && v !== undefined);
+                    if (validValues.length > 0) {
+                        const avgVoltage = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+                        const minVoltage = Math.min(...validValues);
+                        const maxVoltage = Math.max(...validValues);
+                        
+                        const slider = document.getElementById(`voltage-pack-${segment}`);
+                        const valueDisplay = document.getElementById(`voltage-pack-${segment}-value`);
+                        
+                        slider.value = avgVoltage;
+                        valueDisplay.textContent = `${minVoltage.toFixed(2)}V - ${maxVoltage.toFixed(2)}V`;
+                        
+                        // Remove all voltage classes
+                        slider.className = 'cell-slider';
+                        
+                        // Add appropriate voltage class based on voltage level
+                        if (avgVoltage < 3.0) {
+                            slider.classList.add('cell-voltage-critical');
+                        } else if (avgVoltage < 3.2) {
+                            slider.classList.add('cell-voltage-low');
+                        } else if (avgVoltage > 4.1) {
+                            slider.classList.add('cell-voltage-high');
+                        } else {
+                            slider.classList.add('cell-voltage-normal');
+                        }
+                    }
+                }
+            }
+
+            // Update temperature sliders
+            if (accumulator.cell_temperatures) {
+                for (let segment = 0; segment < 7; segment++) {
+                    const startIndex = segment * 15;
+                    const endIndex = Math.min(startIndex + 15, 105);
+                    const segmentData = accumulator.cell_temperatures.slice(startIndex, endIndex);
+                    
+                    const validValues = segmentData.filter(v => v !== null && v !== undefined);
+                    if (validValues.length > 0) {
+                        const avgTemp = validValues.reduce((a, b) => a + b, 0) / validValues.length;
+                        const minTemp = Math.min(...validValues);
+                        const maxTemp = Math.max(...validValues);
+                        
+                        const slider = document.getElementById(`temp-pack-${segment}`);
+                        const valueDisplay = document.getElementById(`temp-pack-${segment}-value`);
+                        
+                        slider.value = avgTemp;
+                        valueDisplay.textContent = `${minTemp.toFixed(1)}°C - ${maxTemp.toFixed(1)}°C`;
+                        
+                        // Remove all temperature classes
+                        slider.className = 'cell-slider';
+                        
+                        // Add appropriate temperature class based on temperature level
+                        if (avgTemp > 60) {
+                            slider.classList.add('cell-temp-critical');
+                        } else if (avgTemp > 45) {
+                            slider.classList.add('cell-temp-high');
+                        } else if (avgTemp > 30) {
+                            slider.classList.add('cell-temp-warm');
+                        } else if (avgTemp > 15) {
+                            slider.classList.add('cell-temp-normal');
+                        } else {
+                            slider.classList.add('cell-temp-cool');
+                        }
+                    }
+                }
+            }
+        }
+
+        function updateInverters(inverters) {
+            const invNames = ['fl', 'fr', 'rl', 'rr'];
+            let avgMosTemp = 0, avgMcuTemp = 0, avgMotorTemp = 0;
+            let validMosTemps = 0, validMcuTemps = 0, validMotorTemps = 0;
+
+            for (let invNum = 1; invNum <= 4; invNum++) {
+                const inv = inverters[invNum];
+                if (inv) {
+                    // Find the corresponding inverter card
+                    const cards = document.querySelectorAll('.bg-slate-800');
+                    const card = cards[invNum - 1];
+                    
+                    if (card) {
+                        card.querySelector('.inv-status').innerHTML = formatInverterStatus(inv.status);
+                        card.querySelector('.inv-torque').textContent = formatValue(inv.torque, '', 3);
+                        card.querySelector('.inv-dc-voltage').textContent = formatValue(inv.dc_voltage, 'V', 1);
+                        card.querySelector('.inv-dc-current').textContent = formatValue(inv.dc_current, 'A', 1);
+                        card.querySelector('.inv-mos-temp').textContent = formatValue(inv.mos_temp, '°C', 1);
+                        card.querySelector('.inv-mcu-temp').textContent = formatValue(inv.mcu_temp, '°C', 1);
+                        card.querySelector('.inv-motor-temp').textContent = formatValue(inv.motor_temp, '°C', 1);
+                        card.querySelector('.inv-heartbeat').innerHTML = formatStatus(inv.heartbeat);
+                    }
+
+                    // Update RPM gauges
+                    const speed = Math.abs(inv.speed) || 0;
+                    const rpmGaugeElement = document.getElementById(`rpm-${invNames[invNum - 1]}-gauge`);
+                    if (rpmGaugeElement) {
+                        updateRPMGauge(rpmGaugeElement, speed);
+                        document.getElementById(`rpm-${invNames[invNum - 1]}-value`).textContent = speed.toFixed(0);
+                    }
+
+                    // Accumulate temperatures for chart
+                    if (inv.mos_temp !== null && inv.mos_temp !== undefined) {
+                        avgMosTemp += inv.mos_temp;
+                        validMosTemps++;
+                    }
+                    if (inv.mcu_temp !== null && inv.mcu_temp !== undefined) {
+                        avgMcuTemp += inv.mcu_temp;
+                        validMcuTemps++;
+                    }
+                    if (inv.motor_temp !== null && inv.motor_temp !== undefined) {
+                        avgMotorTemp += inv.motor_temp;
+                        validMotorTemps++;
+                    }
+
+                    updateInverterHeartbeat(invNum, inv.heartbeat);
+                }
+            }
+
+            // Calculate average temperatures for chart and update them
+            const avgTemps = {};
+            if (validMosTemps > 0) {
+                avgTemps.mos = avgMosTemp / validMosTemps;
+            }
+            if (validMcuTemps > 0) {
+                avgTemps.mcu = avgMcuTemp / validMcuTemps;
+            }
+            if (validMotorTemps > 0) {
+                avgTemps.motor = avgMotorTemp / validMotorTemps;
+            }
+            
+            updateTempChartWithInverters(avgTemps);
+            return avgTemps;
+        }
+
+        function updateCharts(accumulator) {
+            try {
+                const now = new Date().toLocaleTimeString();
+                
+                // Limit data points to last 20 entries
+                const maxDataPoints = 20;
+                
+                // Update power chart
+                if (accumulator.voltage !== null && accumulator.current !== null && powerChart) {
+                    chartData.power.labels.push(now);
+                    chartData.power.voltage.push(accumulator.voltage);
+                    chartData.power.current.push(accumulator.current);
+                    
+                    if (chartData.power.labels.length > maxDataPoints) {
+                        chartData.power.labels.shift();
+                        chartData.power.voltage.shift();
+                        chartData.power.current.shift();
+                    }
+                    
+                    powerChart.data.labels = chartData.power.labels;
+                    powerChart.data.datasets[0].data = chartData.power.voltage;
+                    powerChart.data.datasets[1].data = chartData.power.current;
+                    powerChart.update('none');
+                }
+                
+                // Update temperature chart
+                if (accumulator.temperature !== null && tempChart) {
+                    if (chartData.temperature.labels.length === 0 || 
+                        chartData.temperature.labels[chartData.temperature.labels.length - 1] !== now) {
+                        chartData.temperature.labels.push(now);
+                        chartData.temperature.acc.push(accumulator.temperature);
+                        
+                        if (chartData.temperature.labels.length > maxDataPoints) {
+                            chartData.temperature.labels.shift();
+                            chartData.temperature.acc.shift();
+                            chartData.temperature.mos.shift();
+                        }
+                        
+                        tempChart.data.labels = chartData.temperature.labels;
+                        tempChart.data.datasets[0].data = chartData.temperature.acc;
+                        tempChart.update('none');
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating charts:', error);
+            }
+        }
+
+        function updateTempChartWithMOS(avgMosTemp) {
+            try {
+                if (avgMosTemp !== null && tempChart) {
+                    const now = new Date().toLocaleTimeString();
+                    
+                    // 確保溫度圖表的MOS數據陣列存在且長度匹配
+                    if (chartData.temperature.mos.length < chartData.temperature.labels.length) {
+                        // 補充缺失的MOS數據點
+                        while (chartData.temperature.mos.length < chartData.temperature.labels.length - 1) {
+                            chartData.temperature.mos.push(null);
+                        }
+                    }
+                    
+                    // 添加當前的MOS溫度數據
+                    chartData.temperature.mos.push(avgMosTemp);
+                    
+                    // 確保數據長度一致
+                    if (chartData.temperature.mos.length > chartData.temperature.labels.length) {
+                        chartData.temperature.mos = chartData.temperature.mos.slice(-chartData.temperature.labels.length);
+                    }
+                    
+                    tempChart.data.datasets[1].data = chartData.temperature.mos;
+                    tempChart.update('none');
+                }
+            } catch (error) {
+                console.error('Error updating MOS temperature chart:', error);
+            }
+        }
+
+        function updateTempChartWithInverters(avgTemps) {
+            try {
+                if (tempChart && Object.keys(avgTemps).length > 0) {
+                    const now = new Date().toLocaleTimeString();
+                    
+                    // Ensure arrays match the labels length
+                    ['mos', 'mcu', 'motor'].forEach((tempType, index) => {
+                        const datasetIndex = index + 1; // Skip accumulator temp (index 0)
+                        
+                        if (chartData.temperature[tempType].length < chartData.temperature.labels.length) {
+                            // Fill missing data points
+                            while (chartData.temperature[tempType].length < chartData.temperature.labels.length - 1) {
+                                chartData.temperature[tempType].push(null);
+                            }
+                        }
+                        
+                        // Add current temperature data
+                        chartData.temperature[tempType].push(avgTemps[tempType] || null);
+                        
+                        // Ensure data length consistency
+                        if (chartData.temperature[tempType].length > chartData.temperature.labels.length) {
+                            chartData.temperature[tempType] = chartData.temperature[tempType].slice(-chartData.temperature.labels.length);
+                        }
+                        
+                        if (tempChart.data.datasets[datasetIndex]) {
+                            tempChart.data.datasets[datasetIndex].data = chartData.temperature[tempType];
+                        }
+                    });
+                    
+                    tempChart.update('none');
+                }
+            } catch (error) {
+                console.error('Error updating inverter temperature chart:', error);
+            }
+        }
+
+        function updateGPSMap(lat, lon) {
+            // Only update map if we receive valid GPS coordinates
+            if (lat !== null && lon !== null && lat !== undefined && lon !== undefined && 
+                !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                const latLng = [lat, lon];
+                
+                // First time receiving GPS data - center map properly
+                if (!mapInitialized) {
+                    map.setView(latLng, 15);
+                    mapInitialized = true;
+                }
+                
+                if (vehicleMarker) {
+                    vehicleMarker.setLatLng(latLng);
+                } else {
+                    // Create custom ripple icon for dark theme
+                    const rippleIcon = L.divIcon({
+                        className: 'ripple-marker-dark',
+                        html: '',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+                    
+                    vehicleMarker = L.marker(latLng, { icon: rippleIcon }).addTo(map)
+                        .bindPopup('Vehicle Position');
+                }
+                
+                // Center map on vehicle position
+                if (map.getZoom() >= 10) {
+                    map.setView(latLng, map.getZoom());
+                }
+            }
+            // If GPS data is invalid/missing, do nothing - keep previous position
+        }
+
+        // Utility functions
+        function formatValue(value, suffix = '', decimals = 2) {
+            if (value === null || value === undefined) {
+                return 'N/A';
+            }
+            if (typeof value === 'number') {
+                return value.toFixed(decimals) + suffix;
+            }
+            return value.toString() + suffix;
+        }
+
+        function formatStatus(status) {
+            if (status === null || status === undefined) {
+                return '<span class="status-unknown">N/A</span>';
+            }
+            if (status === 1 || status === true) {
+                return '<span class="status-ok">OK</span>';
+            }
+            return '<span class="status-bad">FAIL</span>';
+        }
+
+        function formatInverterStatus(status) {
+            if (status === null || status === undefined) {
+                return '<span class="status-unknown">N/A</span>';
+            }
+            
+            const statusHex = `0x${status.toString(16).toUpperCase().padStart(4, '0')}`;
+            let statusText = '';
+            let statusClass = 'status-unknown';
+            
+            switch (status) {
+                case 0x00:
+                    statusText = 'Boot up';
+                    statusClass = 'status-unknown';
+                    break;
+                case 0x04:
+                    statusText = 'Stopped';
+                    statusClass = 'status-bad';
+                    break;
+                case 0x05:
+                    statusText = 'Operational';
+                    statusClass = 'status-ok';
+                    break;
+                case 0x7f:
+                    statusText = 'Pre-op';
+                    statusClass = 'status-unknown';
+                    break;
+                default:
+                    statusText = 'Unknown';
+                    statusClass = 'status-unknown';
+                    break;
+            }
+            
+            return `<span class="${statusClass}">${statusHex}<br>${statusText}</span>`;
+        }
+
+        function updateHeartbeat(elementId, status) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            if (status === true) {
+                element.className = 'heartbeat-indicator heartbeat-ok ml-2';
+            } else {
+                element.className = 'heartbeat-indicator heartbeat-fail ml-2';
+            }
+        }
+
+        function updateInverterHeartbeat(invNum, status) {
+            const element = document.querySelector(`[data-inv="${invNum}"]`);
+            if (!element) return;
+            
+            if (status === true) {
+                element.className = 'heartbeat-indicator heartbeat-ok';
+            } else {
+                element.className = 'heartbeat-indicator heartbeat-fail';
+            }
+        }
+
+        // Initial data fetch
+        fetch('/api/data')
+            .then(response => response.json())
+            .then(data => updateDisplay(data))
+            .catch(error => console.error('Error fetching initial data:', error));
+    </script>
+</body>
+</html>

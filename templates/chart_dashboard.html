@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTURT Dynamic Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Dark Theme Customization */
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .glass-card {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            transition: all 0.4s ease;
+        }
+        
+        .glass-card:hover {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            box-shadow: 
+                0 10px 30px rgba(59, 130, 246, 0.2),
+                0 0 30px rgba(59, 130, 246, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transform: translateY(-5px) scale(1.02);
+        }
+
+        /* Speed Gauge Styles */
+        .speed-gauge {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+        }
+
+        .circular-gauge {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(from 270deg, #3b82f6 0deg, #3b82f6 var(--gauge-angle, 0deg), #1f2937 var(--gauge-angle, 0deg), #1f2937 360deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 6px solid #1f2937;
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.4);
+        }
+
+        .gauge-inner {
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            border: 3px solid rgba(59, 130, 246, 0.3);
+        }
+
+        /* Progress Bars for APPS and Brake */
+        .vertical-bar {
+            width: 40px;
+            height: 200px;
+            background: linear-gradient(to top, #1f2937, #374151);
+            border-radius: 20px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #374151;
+        }
+
+        .bar-fill {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            border-radius: 0 0 18px 18px;
+            transition: height 0.3s ease, background 0.3s ease;
+        }
+
+        .apps-bar .bar-fill {
+            background: linear-gradient(to top, #10b981, #34d399);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+        }
+
+        .brake-bar .bar-fill {
+            background: linear-gradient(to top, #ef4444, #f87171);
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+        }
+
+        /* RPM Gauges */
+        .mini-gauge {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+        }
+
+        .mini-circular-gauge {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: conic-gradient(from 270deg, #10b981 0deg, #10b981 var(--gauge-angle, 0deg), #1f2937 var(--gauge-angle, 0deg), #1f2937 360deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 3px solid #1f2937;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .mini-gauge-inner {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        /* Chart containers */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 8px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .chart-container:hover {
+            background: rgba(15, 23, 42, 0.95);
+            border-color: #3b82f6;
+            box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+            transform: translateY(-5px);
+        }
+
+        /* Connection indicator */
+        .connection-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: bold;
+        }
+
+        .connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid #10b981;
+        }
+
+        .disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+
+        /* Heartbeat indicators */
+        .heartbeat-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .heartbeat-ok { 
+            background: #10b981; 
+            box-shadow: 0 0 10px #10b981;
+        }
+
+        .heartbeat-fail { 
+            background: #ef4444; 
+            box-shadow: 0 0 10px #ef4444;
+        }
+
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+
+        .slider::-webkit-slider-track {
+            background: #374151;
+            border-radius: 5px;
+        }
+
+        .slider::-moz-range-track {
+            background: #374151;
+            border-radius: 5px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+
+        /* Status colors */
+        .status-ok { color: #10b981; font-weight: bold; text-shadow: 0 0 10px #10b981; }
+        .status-bad { color: #ef4444; font-weight: bold; text-shadow: 0 0 10px #ef4444; }
+        .status-unknown { color: #6b7280; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-indicator disconnected">
+        <span id="connection-text">Connecting...</span>
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                        NTURT Dynamic Dashboard
+                    </h1>
+                    <p class="text-slate-400 mt-2">Real-time Racing Telemetry System</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm text-slate-400">Messages</div>
+                    <div id="message-count" class="text-3xl font-bold text-cyan-400">0</div>
+                    <div class="text-xs text-slate-500" id="last-update">Waiting for data...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 播放控制面板 -->
+        <div class="glass-card rounded-lg p-4 mb-6" id="playback-controls" style="display: none;">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <span class="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
+                PLAYER CONTROL
+            </h3>
+            <div class="flex items-center justify-between space-x-4">
+                <div class="flex items-center space-x-2">
+                    <button id="play-pause-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors">
+                        ⏸️ STOP
+                    </button>
+                    <button id="backward-btn" class="px-3 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg text-white transition-colors">
+                        ⏪ -10s
+                    </button>
+                    <button id="forward-btn" class="px-3 py-2 bg-slate-600 hover:bg-slate-700 rounded-lg text-white transition-colors">
+                        ⏩ +10s
+                    </button>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <label class="text-slate-400 text-sm">SPEED:</label>
+                    <select id="speed-select" class="bg-slate-700 text-white rounded px-2 py-1 text-sm">
+                        <option value="0.1">0.1x</option>
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="2">2x</option>
+                        <option value="5">5x</option>
+                        <option value="10">10x</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <label class="text-slate-400 text-sm">FILE:</label>
+                    <select id="file-select" class="bg-slate-700 text-white rounded px-2 py-1 text-sm">
+                        <option value="">LOADING...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="current-time" class="text-sm text-slate-400">00:00</span>
+                    <span id="total-time" class="text-sm text-slate-400">00:00</span>
+                </div>
+                <input type="range" id="progress-bar" min="0" max="100" value="0" 
+                    class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer slider">
+            </div>
+        </div>
+
+        <!-- Main Speed and Controls Section -->
+        <div class="glass-card rounded-lg p-8 mb-6">
+            <div class="flex items-center justify-center space-x-12">
+                <!-- APPS Bar -->
+                <div class="flex flex-col items-center">
+                    <div class="vertical-bar apps-bar">
+                        <div class="bar-fill" id="apps-fill" style="height: 0%"></div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <div class="text-lg font-bold text-green-400">APPS</div>
+                        <div id="apps-value" class="text-2xl font-mono text-green-300">0%</div>
+                    </div>
+                </div>
+
+                <!-- Speed Gauge -->
+                <div class="flex flex-col items-center">
+                    <div class="speed-gauge">
+                        <div class="circular-gauge" id="speed-gauge">
+                            <div class="gauge-inner">
+                                <div id="speed-value" class="text-4xl font-bold text-white mb-2">0</div>
+                                <div class="text-lg text-slate-400 mb-2">km/h</div>
+                                <div class="text-sm text-slate-500">
+                                    <span id="rpm-value">0</span> RPM
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <div class="text-xl font-bold text-blue-400">Vehicle Speed</div>
+                    </div>
+                </div>
+
+                <!-- Brake Bar -->
+                <div class="flex flex-col items-center">
+                    <div class="vertical-bar brake-bar">
+                        <div class="bar-fill" id="brake-fill" style="height: 0%"></div>
+                    </div>
+                    <div class="mt-4 text-center">
+                        <div class="text-lg font-bold text-red-400">BRAKE</div>
+                        <div id="brake-value" class="text-2xl font-mono text-red-300">0%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RPM Gauges -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <h3 class="text-2xl font-bold text-center mb-6 text-green-400">Motor RPM</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <!-- FL Motor -->
+                <div class="text-center">
+                    <div class="mini-gauge">
+                        <div class="mini-circular-gauge" id="rpm-fl-gauge">
+                            <div class="mini-gauge-inner">
+                                <div id="rpm-fl-value" class="text-lg font-bold text-green-400">0</div>
+                                <div class="text-xs text-slate-400">RPM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-slate-300 mt-2 font-medium">FL Motor</div>
+                    <div class="text-xs text-cyan-400 mt-1" id="speed-fl-value">0 km/h</div>
+                </div>
+
+                <!-- FR Motor -->
+                <div class="text-center">
+                    <div class="mini-gauge">
+                        <div class="mini-circular-gauge" id="rpm-fr-gauge">
+                            <div class="mini-gauge-inner">
+                                <div id="rpm-fr-value" class="text-lg font-bold text-green-400">0</div>
+                                <div class="text-xs text-slate-400">RPM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-slate-300 mt-2 font-medium">FR Motor</div>
+                    <div class="text-xs text-cyan-400 mt-1" id="speed-fr-value">0 km/h</div>
+                </div>
+
+                <!-- RL Motor -->
+                <div class="text-center">
+                    <div class="mini-gauge">
+                        <div class="mini-circular-gauge" id="rpm-rl-gauge">
+                            <div class="mini-gauge-inner">
+                                <div id="rpm-rl-value" class="text-lg font-bold text-green-400">0</div>
+                                <div class="text-xs text-slate-400">RPM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-slate-300 mt-2 font-medium">RL Motor</div>
+                    <div class="text-xs text-cyan-400 mt-1" id="speed-rl-value">0 km/h</div>
+                </div>
+
+                <!-- RR Motor -->
+                <div class="text-center">
+                    <div class="mini-gauge">
+                        <div class="mini-circular-gauge" id="rpm-rr-gauge">
+                            <div class="mini-gauge-inner">
+                                <div id="rpm-rr-value" class="text-lg font-bold text-green-400">0</div>
+                                <div class="text-xs text-slate-400">RPM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-slate-300 mt-2 font-medium">RR Motor</div>
+                    <div class="text-xs text-cyan-400 mt-1" id="speed-rr-value">0 km/h</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Torque Chart -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 text-purple-400">Torque Over Time</h3>
+                <div class="chart-container">
+                    <canvas id="torque-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- RPM Chart -->
+            <div class="glass-card rounded-lg p-6">
+                <h3 class="text-xl font-bold mb-4 text-green-400">RPM Over Time</h3>
+                <div class="chart-container">
+                    <canvas id="rpm-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inverters Status -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <h3 class="text-xl font-bold mb-4 flex items-center">
+                <span class="w-3 h-3 bg-purple-500 rounded-full mr-2"></span>
+                Inverters Status
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- FL Inverter -->
+                <div class="bg-slate-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="font-bold text-purple-400">FL</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="1"></span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Status:</span>
+                            <span class="inv-status text-xs">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Torque:</span>
+                            <span class="inv-torque font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC V:</span>
+                            <span class="inv-dc-voltage font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC I:</span>
+                            <span class="inv-dc-current font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MOS T:</span>
+                            <span class="inv-mos-temp font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MCU T:</span>
+                            <span class="inv-mcu-temp font-mono">N/A</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FR Inverter -->
+                <div class="bg-slate-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="font-bold text-purple-400">FR</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="2"></span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Status:</span>
+                            <span class="inv-status text-xs">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Torque:</span>
+                            <span class="inv-torque font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC V:</span>
+                            <span class="inv-dc-voltage font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC I:</span>
+                            <span class="inv-dc-current font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MOS T:</span>
+                            <span class="inv-mos-temp font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MCU T:</span>
+                            <span class="inv-mcu-temp font-mono">N/A</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RL Inverter -->
+                <div class="bg-slate-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="font-bold text-purple-400">RL</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="3"></span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Status:</span>
+                            <span class="inv-status text-xs">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Torque:</span>
+                            <span class="inv-torque font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC V:</span>
+                            <span class="inv-dc-voltage font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC I:</span>
+                            <span class="inv-dc-current font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MOS T:</span>
+                            <span class="inv-mos-temp font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MCU T:</span>
+                            <span class="inv-mcu-temp font-mono">N/A</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RR Inverter -->
+                <div class="bg-slate-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="font-bold text-purple-400">RR</span>
+                        <span class="heartbeat-indicator heartbeat-fail" data-inv="4"></span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Status:</span>
+                            <span class="inv-status text-xs">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Torque:</span>
+                            <span class="inv-torque font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC V:</span>
+                            <span class="inv-dc-voltage font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">DC I:</span>
+                            <span class="inv-dc-current font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MOS T:</span>
+                            <span class="inv-mos-temp font-mono">N/A</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">MCU T:</span>
+                            <span class="inv-mcu-temp font-mono">N/A</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="glass-card rounded-lg p-4 text-center">
+            <p class="text-slate-400">NTURT Racing Team - Dynamic Dashboard v3.0</p>
+        </div>
+    </div>
+
+    <!-- Include external JavaScript -->
+    <script>
+        // Dashboard JavaScript for NTURT Dynamic Dashboard
+class NTURTDashboard {
+    constructor() {
+        this.websocket = null;
+        this.isConnected = false;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 3000;
+        
+        // Data storage
+        this.lastData = null;
+        this.torqueHistory = [];
+        this.rpmHistory = [];
+        this.maxHistoryPoints = 100;
+        
+        // Chart instances
+        this.torqueChart = null;
+        this.rpmChart = null;
+        
+        // Initialize components
+        this.initWebSocket();
+        this.initCharts();
+        this.startHeartbeatCheck();
+        this.initPlaybackControls();
+        this.loadAvailableFiles();
+        
+        console.log('NTURT Dashboard initialized');
+    }
+
+    initWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        try {
+            this.websocket = new WebSocket(wsUrl);
+            
+            this.websocket.onopen = () => {
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+                this.updateConnectionStatus(true);
+                console.log('WebSocket connected');
+            };
+            
+            this.websocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.lastData = data;
+                    this.updateDashboard(data);
+                } catch (error) {
+                    console.error('Error parsing WebSocket data:', error);
+                }
+            };
+            
+            this.websocket.onclose = () => {
+                this.isConnected = false;
+                this.updateConnectionStatus(false);
+                console.log('WebSocket disconnected');
+                this.scheduleReconnect();
+            };
+            
+            this.websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                this.isConnected = false;
+                this.updateConnectionStatus(false);
+            };
+            
+        } catch (error) {
+            console.error('Failed to create WebSocket:', error);
+            this.updateConnectionStatus(false);
+            this.scheduleReconnect();
+        }
+    }
+
+    scheduleReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+            setTimeout(() => {
+                this.initWebSocket();
+            }, this.reconnectDelay);
+        } else {
+            console.log('Max reconnection attempts reached');
+            document.getElementById('connection-text').textContent = 'Connection failed';
+        }
+    }
+
+    updateConnectionStatus(connected) {
+        const statusElement = document.getElementById('connection-status');
+        const textElement = document.getElementById('connection-text');
+        
+        if (connected) {
+            statusElement.className = 'connection-indicator connected';
+            textElement.textContent = 'Connected';
+        } else {
+            statusElement.className = 'connection-indicator disconnected';
+            textElement.textContent = 'Disconnected';
+        }
+    }
+
+    updateDashboard(data) {
+        try {
+            // Update message count and timestamp
+            this.updateMessageCount(data.message_count);
+            this.updateLastUpdate(data.update_time);
+            
+            // Update VCU data (APPS and Brake bars)
+            this.updateVCUData(data.vcu);
+            
+            // Update speed gauge with RPM conversion
+            this.updateSpeedGauge(data.velocity, data.inverters);
+            
+            // Update RPM gauges for individual motors
+            this.updateRPMGauges(data.inverters);
+            
+            // Update inverter status
+            this.updateInverterStatus(data.inverters);
+            
+            // Update charts with new data
+            this.updateCharts(data);
+
+            // Update playback controls
+            this.updatePlaybackControls(data);
+            
+        } catch (error) {
+            console.error('Error updating dashboard:', error);
+        }
+    }
+
+    updateMessageCount(count) {
+        const element = document.getElementById('message-count');
+        if (element && count !== undefined) {
+            element.textContent = count.toLocaleString();
+        }
+    }
+
+    updateLastUpdate(timestamp) {
+        const element = document.getElementById('last-update');
+        if (element && timestamp) {
+            const date = new Date(timestamp);
+            element.textContent = `Last update: ${date.toLocaleTimeString()}`;
+        }
+    }
+
+    updateVCUData(vcu) {
+        if (!vcu) return;
+        
+        // Update APPS bar and value
+        if (vcu.apps1 !== null && vcu.apps1 !== undefined) {
+            const appsPercent = Math.max(0, Math.min(100, vcu.apps1));
+            const appsFill = document.getElementById('apps-fill');
+            const appsValue = document.getElementById('apps-value');
+            
+            if (appsFill) appsFill.style.height = `${appsPercent}%`;
+            if (appsValue) appsValue.textContent = `${appsPercent}%`;
+        }
+        
+        // Update Brake bar and value
+        if (vcu.brake !== null && vcu.brake !== undefined) {
+            const brakePercent = Math.max(0, Math.min(100, vcu.brake));
+            const brakeFill = document.getElementById('brake-fill');
+            const brakeValue = document.getElementById('brake-value');
+            
+            if (brakeFill) brakeFill.style.height = `${brakePercent}%`;
+            if (brakeValue) brakeValue.textContent = `${brakePercent}%`;
+        }
+    }
+
+    updateSpeedGauge(velocity, inverters) {
+        let speed = 0;
+        let totalRPM = 0;
+        let motorCount = 0;
+        
+        // Calculate average RPM from all motors and convert to km/h
+        if (inverters) {
+            Object.values(inverters).forEach(motor => {
+                if (motor.speed !== null && motor.speed !== undefined) {
+                    totalRPM += Math.abs(motor.speed);
+                    motorCount++;
+                }
+            });
+            
+            if (motorCount > 0) {
+                const avgRPM = totalRPM / motorCount;
+                speed = avgRPM * 0.00703; // RPM to km/h conversion
+            }
+        }
+        
+        // Fallback to velocity data if available
+        if (speed === 0 && velocity && velocity.speed_kmh !== null) {
+            speed = Math.abs(velocity.speed_kmh);
+        }
+        
+        // Update speed display
+        const speedValue = document.getElementById('speed-value');
+        const rpmValue = document.getElementById('rpm-value');
+        const speedGauge = document.getElementById('speed-gauge');
+        
+        if (speedValue) {
+            speedValue.textContent = Math.round(speed);
+        }
+        
+        if (rpmValue && motorCount > 0) {
+            rpmValue.textContent = Math.round(totalRPM / motorCount);
+        }
+        
+        // Update gauge visual (0-200 km/h range)
+        if (speedGauge) {
+            const maxSpeed = 200;
+            const angle = Math.min(360, (speed / maxSpeed) * 360);
+            speedGauge.style.setProperty('--gauge-angle', `${angle}deg`);
+        }
+    }
+
+    updateRPMGauges(inverters) {
+        if (!inverters) return;
+        
+        const motorIds = ['fl', 'fr', 'rl', 'rr'];
+        const motorMap = {
+            'fl': 1, 'fr': 2, 'rl': 3, 'rr': 4
+        };
+        
+        motorIds.forEach(motorId => {
+            const motorNum = motorMap[motorId];
+            const motor = inverters[motorNum];
+            
+            const valueElement = document.getElementById(`rpm-${motorId}-value`);
+            const gaugeElement = document.getElementById(`rpm-${motorId}-gauge`);
+            const speedElement = document.getElementById(`speed-${motorId}-value`);
+            if (motor && motor.speed !== null && motor.speed !== undefined) {
+                const rpm = Math.abs(motor.speed);
+                
+                if (valueElement) {
+                    valueElement.textContent = Math.round(rpm);
+                }
+                const speedElement = document.getElementById(`speed-${motorId}-value`);
+                if (speedElement) {
+                    const speed = rpm * 0.00703; // RPM轉換為km/h
+                    speedElement.textContent = `${speed.toFixed(1)} km/h`;
+                }
+                
+                if (gaugeElement) {
+                    const maxRPM = 8000;
+                    const angle = Math.min(360, (rpm / maxRPM) * 360);
+                    gaugeElement.style.setProperty('--gauge-angle', `${angle}deg`);
+                }
+            } else {
+                if (valueElement) valueElement.textContent = '0';
+                if (speedElement) speedElement.textContent = '0 km/h'; // 新增
+                if (gaugeElement) gaugeElement.style.setProperty('--gauge-angle', '0deg');
+            }
+        });
+    }
+
+    updateInverterStatus(inverters) {
+        if (!inverters) return;
+        
+        Object.entries(inverters).forEach(([invNum, data]) => {
+            const invCards = document.querySelectorAll('.bg-slate-800');
+            const invIndex = parseInt(invNum) - 1;
+            
+            if (invIndex >= 0 && invIndex < invCards.length) {
+                const card = invCards[invIndex];
+                
+                // Update heartbeat indicator
+                const heartbeatIndicator = card.querySelector('.heartbeat-indicator');
+                if (heartbeatIndicator && data.heartbeat !== null) {
+                    heartbeatIndicator.className = `heartbeat-indicator ${data.heartbeat ? 'heartbeat-ok' : 'heartbeat-fail'}`;
+                }
+                
+                // Update status values
+                this.updateInverterField(card, '.inv-status', this.getInverterStatus(data.status));
+                this.updateInverterField(card, '.inv-torque', data.torque !== null ? `${data.torque.toFixed(2)} Nm` : 'N/A');
+                this.updateInverterField(card, '.inv-dc-voltage', data.dc_voltage !== null ? `${data.dc_voltage.toFixed(1)} V` : 'N/A');
+                this.updateInverterField(card, '.inv-dc-current', data.dc_current !== null ? `${data.dc_current.toFixed(1)} A` : 'N/A');
+                this.updateInverterField(card, '.inv-mos-temp', data.mos_temp !== null ? `${data.mos_temp.toFixed(1)}°C` : 'N/A');
+                this.updateInverterField(card, '.inv-mcu-temp', data.mcu_temp !== null ? `${data.mcu_temp.toFixed(1)}°C` : 'N/A');
+            }
+        });
+    }
+
+    updateInverterField(card, selector, value) {
+        const element = card.querySelector(selector);
+        if (element) {
+            element.textContent = value;
+            
+            // Add status styling for status field
+            if (selector === '.inv-status') {
+                element.className = element.className.replace(/status-\w+/g, '');
+                if (value === 'OK' || value === 'Ready') {
+                    element.classList.add('status-ok');
+                } else if (value === 'N/A' || value === 'Unknown') {
+                    element.classList.add('status-unknown');
+                } else {
+                    element.classList.add('status-bad');
+                }
+            }
+        }
+    }
+
+    getInverterStatus(status) {
+        if (!status || status === null) return 'N/A';
+        
+        // Simple status interpretation - you may need to adjust based on your specific status codes
+        if (Array.isArray(status)) {
+            const [status1, status2] = status;
+            if (status1 === 0 && status2 === 0) return 'OK';
+            return `0x${status1.toString(16).padStart(2, '0')}${status2.toString(16).padStart(2, '0')}`;
+        }
+        
+        return status.toString();
+    }
+
+    initCharts() {
+        // Initialize Torque Chart
+        const torqueCtx = document.getElementById('torque-chart');
+        if (torqueCtx) {
+            this.torqueChart = new Chart(torqueCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'RL Motor',
+                            data: [],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'RR Motor',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'RL Motor(FB)',
+                            data: [],
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'RR Motor(FB)',
+                            data: [],
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        },
+                        y: {
+                            min: -20,
+                            max: 20,
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Torque (Nm)',
+                                color: '#e2e8f0'
+                            }
+                        }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+
+        // Initialize RPM Chart
+        const rpmCtx = document.getElementById('rpm-chart');
+        if (rpmCtx) {
+            this.rpmChart = new Chart(rpmCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'FL Motor',
+                            data: [],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'FR Motor',
+                            data: [],
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'RL Motor',
+                            data: [],
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+  
+                        },
+                        {
+                            label: 'RR Motor',
+                            data: [],
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        },
+                        y: {
+                            min: 0,
+                            max: 8000,
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            title: {
+                                display: true,
+                                text: 'RPM',
+                                color: '#e2e8f0'
+                            }
+                        }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+    }
+
+    updateCharts(data) {
+        const currentTime = new Date().toLocaleTimeString();
+        
+        // Update Torque Chart
+        if (this.torqueChart && data.inverters) {
+            const torqueData = [
+                data.inverters[3]?.target_torque || 0,
+                data.inverters[4]?.target_torque || 0,
+                data.inverters[3]?.torque || 0,
+                data.inverters[4]?.torque || 0
+            ];
+            
+            // Add new data point
+            this.torqueChart.data.labels.push(currentTime);
+            this.torqueChart.data.datasets.forEach((dataset, index) => {
+                dataset.data.push(torqueData[index]);
+            });
+            
+            // Limit data points
+            if (this.torqueChart.data.labels.length > this.maxHistoryPoints) {
+                this.torqueChart.data.labels.shift();
+                this.torqueChart.data.datasets.forEach(dataset => {
+                    dataset.data.shift();
+                });
+            }
+            
+            this.torqueChart.update('none');
+        }
+        
+        // Update RPM Chart
+        if (this.rpmChart && data.inverters) {
+            const rpmData = [
+                Math.abs(data.inverters[1]?.speed || 0),
+                Math.abs(data.inverters[2]?.speed || 0),
+                Math.abs(data.inverters[3]?.speed || 0),
+                Math.abs(data.inverters[4]?.speed || 0)
+            ];
+            
+            // Add new data point
+            this.rpmChart.data.labels.push(currentTime);
+            this.rpmChart.data.datasets.forEach((dataset, index) => {
+                dataset.data.push(rpmData[index]);
+            });
+            
+            // Limit data points
+            if (this.rpmChart.data.labels.length > this.maxHistoryPoints) {
+                this.rpmChart.data.labels.shift();
+                this.rpmChart.data.datasets.forEach(dataset => {
+                    dataset.data.shift();
+                });
+            }
+            
+            this.rpmChart.update('none');
+        }
+    }
+
+    startHeartbeatCheck() {
+        // Send periodic heartbeat to maintain WebSocket connection
+        setInterval(() => {
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                this.websocket.send(JSON.stringify({ type: 'heartbeat' }));
+            }
+        }, 30000); // Send heartbeat every 30 seconds
+    }
+
+    initPlaybackControls() {
+        // 檢查是否在 CSV 模式下顯示控制面板
+        const controlsPanel = document.getElementById('playback-controls');
+        if (controlsPanel) {
+            // 假設在 CSV 模式下顯示（你可以根據實際情況調整）
+            controlsPanel.style.display = 'block';
+        }
+        
+        // 播放/暫停按鈕
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        if (playPauseBtn) {
+            playPauseBtn.addEventListener('click', () => {
+                this.togglePlayPause();
+            });
+        }
+        
+        // 後退按鈕
+        const backwardBtn = document.getElementById('backward-btn');
+        if (backwardBtn) {
+            backwardBtn.addEventListener('click', () => {
+                this.jumpTime(-10);
+            });
+        }
+        
+        // 前進按鈕
+        const forwardBtn = document.getElementById('forward-btn');
+        if (forwardBtn) {
+            forwardBtn.addEventListener('click', () => {
+                this.jumpTime(10);
+            });
+        }
+        
+        // 速度選擇
+        const speedSelect = document.getElementById('speed-select');
+        if (speedSelect) {
+            speedSelect.addEventListener('change', (e) => {
+                this.setPlaybackSpeed(parseFloat(e.target.value));
+            });
+        }
+        
+        // 檔案選擇
+        const fileSelect = document.getElementById('file-select');
+        if (fileSelect) {
+            fileSelect.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    this.switchFile(e.target.value);
+                }
+            });
+        }
+        
+        // 進度條
+        const progressBar = document.getElementById('progress-bar');
+        if (progressBar) {
+            progressBar.addEventListener('input', (e) => {
+                this.jumpToPercentage(parseFloat(e.target.value));
+            });
+        }
+    }
+
+    async loadAvailableFiles() {
+        try {
+            const response = await fetch('/api/control/files');
+            const data = await response.json();
+            
+            if (data.files) {
+                const fileSelect = document.getElementById('file-select');
+                if (fileSelect) {
+                    fileSelect.innerHTML = '';
+                    data.files.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file;
+                        option.textContent = file;
+                        fileSelect.appendChild(option);
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load available files:', error);
+        }
+    }
+
+    async togglePlayPause() {
+        try {
+            // 先獲取當前狀態
+            const statusResponse = await fetch('/api/control/status');
+            const status = await statusResponse.json();
+            
+            const endpoint = status.is_paused ? '/api/control/resume' : '/api/control/pause';
+            const response = await fetch(endpoint, { method: 'POST' });
+            const result = await response.json();
+            
+            console.log('Play/Pause result:', result);
+        } catch (error) {
+            console.error('Failed to toggle play/pause:', error);
+        }
+    }
+
+    async setPlaybackSpeed(speed) {
+        try {
+            const response = await fetch('/api/control/speed', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ speed: speed })
+            });
+            const result = await response.json();
+            console.log('Speed change result:', result);
+        } catch (error) {
+            console.error('Failed to set playback speed:', error);
+        }
+    }
+
+    async jumpTime(seconds) {
+        try {
+            const response = await fetch('/api/control/jump', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ seconds: seconds })
+            });
+            const result = await response.json();
+            console.log('Jump result:', result);
+        } catch (error) {
+            console.error('Failed to jump time:', error);
+        }
+    }
+
+    async jumpToPercentage(percentage) {
+        try {
+            const response = await fetch('/api/control/jump', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ percentage: percentage })
+            });
+            const result = await response.json();
+            console.log('Jump to percentage result:', result);
+        } catch (error) {
+            console.error('Failed to jump to percentage:', error);
+        }
+    }
+
+    async switchFile(filename) {
+        try {
+            const response = await fetch('/api/control/switch-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: filename })
+            });
+            const result = await response.json();
+            console.log('File switch result:', result);
+        } catch (error) {
+            console.error('Failed to switch file:', error);
+        }
+    }
+
+    updatePlaybackControls(data) {
+        if (!data.playback_control) return;
+        
+        const control = data.playback_control;
+        
+        // 更新播放/暫停按鈕
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        if (playPauseBtn) {
+            if (control.is_paused) {
+                playPauseBtn.textContent = '▶️ PLAY';
+                playPauseBtn.className = 'control-btn primary paused';
+            } else {
+                playPauseBtn.textContent = '⏸️ STOP';
+                playPauseBtn.className = 'control-btn primary';
+            }
+        }
+        
+        // 更新進度條
+        const progressBar = document.getElementById('progress-bar');
+        if (progressBar) {
+            progressBar.value = control.progress;
+        }
+        
+        // 更新時間顯示
+        const currentTime = document.getElementById('current-time');
+        const totalTime = document.getElementById('total-time');
+        if (currentTime) currentTime.textContent = control.current_time;
+        if (totalTime) totalTime.textContent = control.total_time;
+        
+        // 更新速度選擇
+        const speedSelect = document.getElementById('speed-select');
+        if (speedSelect) {
+            speedSelect.value = control.speed;
+        }
+        
+        // 更新檔案選擇
+        const fileSelect = document.getElementById('file-select');
+        if (fileSelect && control.current_file) {
+            fileSelect.value = control.current_file;
+        }
+    }
+
+    // Clean up resources
+    destroy() {
+        if (this.websocket) {
+            this.websocket.close();
+        }
+        if (this.torqueChart) {
+            this.torqueChart.destroy();
+        }
+        if (this.rpmChart) {
+            this.rpmChart.destroy();
+        }
+    }
+}
+
+// Initialize dashboard when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    window.dashboard = new NTURTDashboard();
+    
+    // Handle page unload
+    window.addEventListener('beforeunload', () => {
+        if (window.dashboard) {
+            window.dashboard.destroy();
+        }
+    });
+});
+
+// Export for potential external use
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = NTURTDashboard;
+}
+    </script>
+</body>
+</html>

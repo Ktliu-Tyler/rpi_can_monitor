@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTU Racing Car Monitor</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* 基礎樣式 */
+        body {
+            background: linear-gradient(135deg, #0d1421 0%, #162238 50%, #0f1924 100%);
+            color: #fff;
+            font-family: 'Segoe UI', '微軟正黑體', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        
+        /* 動畫關鍵幀 */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px #00eaff44; }
+            50% { box-shadow: 0 0 30px #00eaff77; }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            animation: fadeInUp 1s ease-out;
+        }
+        
+        h1 {
+            color: #00eaff;
+            text-shadow: 0 0 10px #00eaff, 0 0 20px #00eaff, 0 0 30px #00eaff88;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            animation: glow 3s ease-in-out infinite;
+            text-align: center;
+        }
+        
+        /* 卡片樣式與動畫 */
+        .card {
+            background: linear-gradient(145deg, #1a2340 0%, #232b4a 100%);
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 16px rgba(0,234,255,0.1);
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            display: inline-block;
+            vertical-align: top;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0,234,255,0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+        .card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 30px rgba(0,234,255,0.3);
+            border: 1px solid rgba(0,234,255,0.3);
+        }
+        
+        .card:hover::before {
+            left: 100%;
+        }
+        
+        .card-title {
+            color: #00eaff;
+            font-size: 1.3rem;
+            margin-bottom: 12px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .card-title::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #00eaff, #00ff99);
+            transition: width 0.3s ease;
+        }
+        
+        .card:hover .card-title::after {
+            width: 100%;
+        }
+        
+        /* 狀態與數值樣式 */
+        .status-ok {
+            color: #00ff99;
+            font-weight: bold;
+            text-shadow: 0 0 8px #00ff9966;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-bad {
+            color: #ff3c3c;
+            font-weight: bold;
+            text-shadow: 0 0 8px #ff3c3c66;
+            animation: pulse 1s infinite;
+        }
+        
+        .value {
+            font-size: 2.4rem;
+            font-weight: bold;
+            color: #00eaff;
+            text-shadow: 0 0 12px #00eaff99;
+            transition: all 0.3s ease;
+            position: relative;
+            z-index: 2;
+        }
+        
+        .value:hover {
+            transform: scale(1.1);
+            text-shadow: 0 0 20px #00eaff;
+        }
+        
+        /* 進度條樣式 */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 8px 0;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00eaff, #00ff99);
+            border-radius: 3px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        /* 布局 */
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .col {
+            flex: 1 1 320px;
+            min-width: 320px;
+        }
+        
+        /* Inverter 網格 */
+        .inverter-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        .inverter-card {
+            background: linear-gradient(135deg, #2a3750 0%, #1e2a3a 100%);
+            border-radius: 16px;
+            padding: 12px 16px;
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(0,234,255,0.1);
+        }
+        
+        .inverter-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            border-color: rgba(0,234,255,0.3);
+        }
+        
+        .inverter-title {
+            color: #00bfff;
+            font-weight: bold;
+            margin-bottom: 6px;
+            font-size: 1.1rem;
+        }
+        
+        .inverter-heartbeat {
+            color: #00ff99;
+            font-size: 1.2rem;
+            margin-left: 8px;
+            animation: pulse 1.5s infinite;
+            transition: all 0.3s ease;
+        }
+        
+        .inverter-heartbeat:hover {
+            transform: scale(1.2);
+            animation: none;
+        }
+        
+        .inverter-heartbeat.bad {
+            color: #ff3c3c;
+            animation: pulse 0.8s infinite;
+        }
+        
+        /* 表格樣式 */
+        .velocity-table, .gps-table {
+            width: 100%;
+            color: #fff;
+            border-collapse: collapse;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .velocity-table td, .gps-table td {
+            padding: 8px 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .velocity-table tr:nth-child(odd), .gps-table tr:nth-child(odd) {
+            background: rgba(26,35,64,0.6);
+        }
+        
+        .velocity-table tr:nth-child(even), .gps-table tr:nth-child(even) {
+            background: rgba(35,43,74,0.6);
+        }
+        
+        .velocity-table tr:hover, .gps-table tr:hover {
+            background: rgba(0,234,255,0.1) !important;
+            transform: scale(1.02);
+        }
+        
+        .label {
+            color: #00eaff;
+            font-weight: bold;
+            text-shadow: 0 0 6px #00eaff66;
+        }
+        
+        /* 地圖容器 */
+        .map-container {
+            height: 240px;
+            border-radius: 16px;
+            overflow: hidden;
+            margin-bottom: 12px;
+            box-shadow: 0 0 20px rgba(0,234,255,0.2);
+            border: 2px solid rgba(0,234,255,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .map-container:hover {
+            box-shadow: 0 0 30px rgba(0,234,255,0.4);
+            border-color: rgba(0,234,255,0.3);
+        }
+        
+        /* 圖表容器 */
+        .chart-container {
+            background: linear-gradient(135deg, #232b4a 0%, #1a2340 100%);
+            border-radius: 16px;
+            padding: 16px;
+            margin-top: 12px;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.2);
+            border: 1px solid rgba(0,234,255,0.1);
+            height: 300px; /* 增加固定高度 */
+        }
+        
+        .chart-container canvas {
+            height: 270px !important; /* 確保canvas有足夠高度 */
+        }
+        
+        /* 特殊布局：圖表區域 */
+        .charts-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr; /* 速度圖表佔2份，其他各佔1份 */
+            gap: 20px;
+            margin-bottom: 3cqi;
+        }
+        
+        @media (max-width: 1200px) {
+            .charts-row {
+                grid-template-columns: 1fr; /* 小螢幕時垂直排列 */
+            }
+        }
+        
+        /* 圓形進度條 */
+        .circular-progress {
+            width: 120px;
+            height: 150px;
+            margin: 20px auto;
+            position: relative;
+        }
+        
+        .circular-progress svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+        
+        .progress-circle {
+            fill: none;
+            stroke: rgba(255,255,255,0.1);
+            stroke-width: 8;
+        }
+        
+        .progress-circle-fill {
+            fill: none;
+            stroke: #00eaff;
+            stroke-width: 8;
+            stroke-dasharray: 377;
+            stroke-dashoffset: 377;
+            transition: stroke-dashoffset 1s ease;
+            filter: drop-shadow(0 0 6px #00eaff66);
+        }
+        
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 40%;
+            transform: translate(-50%, -50%);
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00eaff;
+            text-shadow: 0 0 8px #00eaff66;
+        }
+        
+        /* 載入動畫 */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0,234,255,0.3);
+            border-radius: 50%;
+            border-top-color: #00eaff;
+            animation: rotate 1s linear infinite;
+            margin-left: 8px;
+        }
+        
+        /* 清除軌跡按鈕樣式 */
+        #clear-trail-btn {
+            background: linear-gradient(135deg, #ff4757, #ff3742);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+        }
+        
+        #clear-trail-btn:hover {
+            background: linear-gradient(135deg, #ff3742, #ff2f42);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(255, 71, 87, 0.4);
+        }
+        
+        #clear-trail-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h1 style="margin: 0;">⚡ <span data-zh="台大賽車隊 車輛監控系統" data-en="NTU RACING CAR MONITOR">台大賽車隊 車輛監控系統</span></h1>
+            <button id="language-toggle" style="background: linear-gradient(135deg, #00eaff, #00ff99); color: #0d1421; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: bold;">中/EN</button>
+        </div>
+        
+        <!-- 第一排：基本監控 -->
+        <div class="row">
+            <div class="col card">
+                <div class="card-title">🌡️ <span data-zh="電池溫度" data-en="Battery Temperature">電池溫度</span></div>
+                <div class="value" id="battery-temp">--°C</div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="temp-progress" style="width: 0%"></div>
+                </div>
+                <div id="battery-status" class="status-ok">--</div>
+            </div>
+            
+            <div class="col card">
+                <div class="card-title">🚗 <span data-zh="車輛速度" data-en="Vehicle Speed">車輛速度</span></div>
+                <div class="circular-progress">
+                    <svg>
+                        <circle class="progress-circle" cx="60" cy="60" r="50"></circle>
+                        <circle class="progress-circle-fill" id="speed-circle" cx="60" cy="60" r="50"></circle>
+                    </svg>
+                    <div class="progress-text" id="car-speed">0</div>
+                </div>
+                <div style="font-size:0.9rem; text-align:center; margin-top:8px;">
+                    <span data-zh="向量" data-en="Vector">向量</span>: X:<span id="vx">--</span> Y:<span id="vy">--</span> Z:<span id="vz">--</span><br>
+                    <span data-zh="大小" data-en="Magnitude">大小</span>: <span id="vmag">--</span> m/s
+                </div>
+            </div>
+            
+            <div class="col card">
+                <div class="card-title">⚡ <span data-zh="電力系統" data-en="Power System">電力系統</span></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.9rem;">
+                    <div><span data-zh="電壓" data-en="Voltage">電壓</span>: <span id="battery-voltage" style="color:#00eaff;">--</span></div>
+                    <div><span data-zh="電流" data-en="Current">電流</span>: <span id="battery-current" style="color:#00ff99;">--</span></div>
+                    <div>SOC: <span id="battery-soc" style="color:#ffa500;">--</span></div>
+                    <div><span data-zh="容量" data-en="Capacity">容量</span>: <span id="battery-capacity" style="color:#ff69b4;">--</span></div>
+                </div>
+                <div class="progress-bar" style="margin: 12px 0;">
+                    <div class="progress-fill" id="soc-progress" style="width: 0%"></div>
+                </div>
+                <div style="text-align:center;"><span data-zh="狀態" data-en="Status">狀態</span>: <span id="battery-status2">--</span></div>
+            </div>
+        </div>
+        
+        <!-- 第二排：GPS 與變頻器 -->
+        <div class="row">
+            <div class="col card" style="min-width:420px;">
+                <div class="card-title">📍 <span data-zh="GPS 即時位置" data-en="GPS Real-time Location">GPS 即時位置</span> 
+                    <span class="loading-spinner" id="gps-spinner" style="display:none;"></span>
+                    <button id="clear-trail-btn" title="清除軌跡">🗑️ <span data-zh="清除軌跡" data-en="Clear Trail">清除軌跡</span></button>
+                </div>
+                <div class="map-container" id="map"></div>
+                <table class="gps-table">
+                    <tr><td class="label"><span data-zh="緯度" data-en="Latitude">緯度</span></td><td id="gps-lat">--</td><td class="label"><span data-zh="經度" data-en="Longitude">經度</span></td><td id="gps-lon">--</td></tr>
+                    <tr><td class="label"><span data-zh="高度" data-en="Altitude">高度</span></td><td id="gps-alt">--</td><td class="label"><span data-zh="GPS速度" data-en="GPS Speed">GPS速度</span></td><td id="gps-speed">--</td></tr>
+                    <tr><td class="label"><span data-zh="狀態" data-en="Status">狀態</span></td><td id="gps-status">--</td><td class="label"><span data-zh="訊號" data-en="Signal">訊號</span></td><td id="gps-signal">--</td></tr>
+                    <tr><td class="label"><span data-zh="軌跡點數" data-en="Trail Points">軌跡點數</span></td><td id="trail-count">0</td><td class="label"><span data-zh="總距離" data-en="Total Distance">總距離</span></td><td id="trail-distance">0m</td></tr>
+                </table>
+            </div>
+            
+            <div class="col card" style="min-width:420px;">
+                <div class="card-title">⚙️ <span data-zh="變頻器狀態（四輪）" data-en="Inverter Status (4 Wheels)">變頻器狀態（四輪）</span></div>
+                <div class="inverter-grid" id="inverter-grid">
+                    <!-- Inverter cards will be injected here -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第三排：圖表區域 -->
+        <div class="charts-row">
+            <div class="card">
+                <div class="card-title">📈 <span data-zh="即時數據趨勢" data-en="Real-time Data Trends">即時數據趨勢</span></div>
+                <div class="chart-container">
+                    <canvas id="speedChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">🔋 <span data-zh="電池監控" data-en="Battery Monitoring">電池監控</span></div>
+                <div class="chart-container">
+                    <canvas id="voltageChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-title">🌡️ <span data-zh="溫度監控" data-en="Temperature Monitoring">溫度監控</span></div>
+                <div class="chart-container">
+                    <canvas id="tempChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 第四排：速度方向詳細 -->
+        <div class="row">
+            <div class="col card" style="min-width:420px;">
+                <div class="card-title">🚗 <span data-zh="速度方向詳細" data-en="Velocity Details">速度方向詳細</span></div>
+                <table class="velocity-table">
+                    <tr><td class="label"><span data-zh="X軸" data-en="X-Axis">X軸</span></td><td id="vx2">--</td><td class="label"><span data-zh="Y軸" data-en="Y-Axis">Y軸</span></td><td id="vy2">--</td></tr>
+                    <tr><td class="label"><span data-zh="Z軸" data-en="Z-Axis">Z軸</span></td><td id="vz2">--</td><td class="label"><span data-zh="向量大小" data-en="Vector Magnitude">向量大小</span></td><td id="vmag2">--</td></tr>
+                </table>
+            </div>
+            
+            <div class="col card" style="min-width:320px;">
+                <div class="card-title">⏱️ <span data-zh="系統狀態" data-en="System Status">系統狀態</span></div>
+                <div style="font-size: 0.9rem;">
+                    <div><span data-zh="CAN通訊" data-en="CAN Communication">CAN通訊</span>: <span id="can-status" class="status-ok"><span data-zh="正常" data-en="Normal">正常</span></span></div>
+                    <div><span data-zh="GPS訊號" data-en="GPS Signal">GPS訊號</span>: <span id="gps-signal-status" class="status-ok"><span data-zh="正常" data-en="Normal">正常</span></span></div>
+                    <div><span data-zh="電池狀態" data-en="Battery Health">電池狀態</span>: <span id="battery-health" class="status-ok"><span data-zh="正常" data-en="Normal">正常</span></span></div>
+                    <div><span data-zh="系統運行" data-en="System Uptime">系統運行</span>: <span id="system-uptime">00:00:00</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="main.js"></script>
+</body>
+</html>
