@@ -16,6 +16,8 @@ class NTURTDashboard {
         // Chart instances
         this.torqueChart = null;
         this.rpmChart = null;
+        this.cellVoltageChart = null;
+        this.cellTempChart = null;     
         
         // Initialize components
         this.initWebSocket();
@@ -104,6 +106,9 @@ class NTURTDashboard {
             this.updateMessageCount(data.message_count);
             this.updateLastUpdate(data.update_time);
             
+            // Update battery information bar
+            this.updateBatteryInfo(data.accumulator);
+            
             // Update VCU data (APPS and Brake bars)
             this.updateVCUData(data.vcu);
             
@@ -139,6 +144,92 @@ class NTURTDashboard {
         if (element && timestamp) {
             const date = new Date(timestamp);
             element.textContent = `Last update: ${date.toLocaleTimeString()}`;
+        }
+    }
+
+    updateBatteryInfo(accumulator) {
+        if (!accumulator) return;
+        
+        // Update SOC (State of Charge)
+        if (accumulator.soc !== null && accumulator.soc !== undefined) {
+            const socPercent = Math.max(0, Math.min(100, accumulator.soc));
+            const socBar = document.getElementById('battery-soc-bar');
+            const socValue = document.getElementById('battery-soc-value');
+            
+            if (socBar) {
+                socBar.style.width = `${socPercent}%`;
+                // 根據電量變更顏色
+                if (socPercent > 50) {
+                    socBar.className = 'battery-bar bg-green-500 h-full rounded transition-all duration-300';
+                } else if (socPercent > 20) {
+                    socBar.className = 'battery-bar bg-yellow-500 h-full rounded transition-all duration-300';
+                } else {
+                    socBar.className = 'battery-bar bg-red-500 h-full rounded transition-all duration-300';
+                }
+            }
+            if (socValue) socValue.textContent = `${socPercent}%`;
+        }
+        
+        // Update Battery Temperature
+        if (accumulator.temperature !== null && accumulator.temperature !== undefined) {
+            const tempValue = document.getElementById('battery-temp-value');
+            if (tempValue) {
+                tempValue.textContent = `${accumulator.temperature.toFixed(1)}°C`;
+                // 根據溫度變更顏色
+                if (accumulator.temperature > 60) {
+                    tempValue.className = 'text-red-400 font-bold';
+                } else if (accumulator.temperature > 45) {
+                    tempValue.className = 'text-yellow-400 font-bold';
+                } else {
+                    tempValue.className = 'text-green-400 font-bold';
+                }
+            }
+        }
+        
+        // Calculate and update Total Voltage (sum of all cell voltages)
+        if (accumulator.cell_voltages && Array.isArray(accumulator.cell_voltages)) {
+            let totalVoltage = 0;
+            let validCells = 0;
+            
+            accumulator.cell_voltages.forEach(voltage => {
+                if (voltage !== null && voltage !== undefined && voltage !== -13 && voltage > 0) {
+                    totalVoltage += voltage;
+                    validCells++;
+                }
+            });
+            
+            const voltageValue = document.getElementById('battery-voltage-value');
+            if (voltageValue) {
+                voltageValue.textContent = `${totalVoltage.toFixed(1)}V`;
+            }
+            
+            // Update valid cells count
+            const cellCountValue = document.getElementById('battery-cells-count');
+            if (cellCountValue) {
+                cellCountValue.textContent = `${validCells} cells`;
+            }
+        }
+        
+        // Update Pack Voltage from direct reading
+        if (accumulator.voltage !== null && accumulator.voltage !== undefined) {
+            const packVoltageValue = document.getElementById('battery-pack-voltage');
+            if (packVoltageValue) {
+                packVoltageValue.textContent = `${accumulator.voltage.toFixed(1)}V`;
+            }
+        }
+        
+        // Update Current
+        if (accumulator.current !== null && accumulator.current !== undefined) {
+            const currentValue = document.getElementById('battery-current-value');
+            if (currentValue) {
+                currentValue.textContent = `${accumulator.current.toFixed(2)}A`;
+                // 根據電流方向變更顏色 (正值充電，負值放電)
+                if (accumulator.current > 0) {
+                    currentValue.className = 'text-green-400 font-bold';
+                } else {
+                    currentValue.className = 'text-orange-400 font-bold';
+                }
+            }
         }
     }
 
@@ -182,7 +273,7 @@ class NTURTDashboard {
             
             if (motorCount > 0) {
                 const avgRPM = totalRPM / motorCount;
-                speed = avgRPM * 0.00703; // RPM to km/h conversion
+                speed = avgRPM * 0.00709; // RPM to km/h conversion
             }
         }
         
@@ -201,7 +292,7 @@ class NTURTDashboard {
         }
         
         if (rpmValue && motorCount > 0) {
-            rpmValue.textContent = Math.round(speed / 0.00703); 
+            rpmValue.textContent = Math.round(speed / 0.00709); 
         }
         
         // Update gauge visual (0-200 km/h range)
@@ -235,7 +326,7 @@ class NTURTDashboard {
                 }
                 const speedElement = document.getElementById(`speed-${motorId}-value`);
                 if (speedElement) {
-                    const speed = rpm * 0.00703; // RPM轉換為km/h
+                    const speed = rpm * 0.00709; // RPM轉換為km/h
                     speedElement.textContent = `${speed.toFixed(1)} km/h`;
                 }
                 
@@ -268,12 +359,19 @@ class NTURTDashboard {
                     heartbeatIndicator.className = `heartbeat-indicator ${data.heartbeat ? 'heartbeat-ok' : 'heartbeat-fail'}`;
                 }
                 
-                // Update status values
-                this.updateInverterField(card, '.inv-status', this.getInverterStatus(data.status));
+                // Update status with visual indicators
+                const statusContainer = card.querySelector('.inv-status-container');
+                if (statusContainer && data.status !== null) {
+                    const statusInfo = this.formatInverterStatus(data.status);
+                    statusContainer.innerHTML = this.generateStatusHTML(statusInfo);
+                }
+                
+                // Update other fields
                 this.updateInverterField(card, '.inv-torque', data.torque !== null ? `${data.torque.toFixed(2)} Nm` : 'N/A');
                 this.updateInverterField(card, '.inv-dc-voltage', data.dc_voltage !== null ? `${data.dc_voltage.toFixed(1)} V` : 'N/A');
                 this.updateInverterField(card, '.inv-dc-current', data.dc_current !== null ? `${data.dc_current.toFixed(1)} A` : 'N/A');
                 this.updateInverterField(card, '.inv-mos-temp', data.mos_temp !== null ? `${data.mos_temp.toFixed(1)}°C` : 'N/A');
+                this.updateInverterField(card, '.inv-motor-temp', data.motor_temp !== null ? `${data.motor_temp.toFixed(1)}°C` : 'N/A');
                 this.updateInverterField(card, '.inv-mcu-temp', data.mcu_temp !== null ? `${data.mcu_temp.toFixed(1)}°C` : 'N/A');
             }
         });
@@ -296,6 +394,44 @@ class NTURTDashboard {
                 }
             }
         }
+    }
+
+    generateStatusHTML(statusInfo) {
+        if (typeof statusInfo === 'string') {
+            return statusInfo;
+        }
+        
+        const readyLight = statusInfo.ready ? 'status-light-green' : 'status-light-red';
+        const enabledLight = statusInfo.enabled ? 'status-light-green' : 'status-light-red';
+        const faultLight = statusInfo.fault ? 'status-light-red' : 'status-light-green';
+        const hvLight = statusInfo.hv ? 'status-light-green' : 'status-light-red';
+        
+        const errorClass = statusInfo.errorCode === 0x0000 ? 'error-none' : 'error-active';
+        
+        return `
+            <div class="status-indicators">
+                <div class="status-row">
+                    <span class="status-label">Ready:</span>
+                    <span class="status-light ${readyLight}"></span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Enable:</span>
+                    <span class="status-light ${enabledLight}"></span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Fault:</span>
+                    <span class="status-light ${faultLight}"></span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">HV:</span>
+                    <span class="status-light ${hvLight}"></span>
+                </div>
+                <div class="error-info ${errorClass}">
+                    <div class="error-text">${statusInfo.errorText}</div>
+                    <div class="error-code">(0x${statusInfo.errorCode.toString(16).padStart(4, '0').toUpperCase()})</div>
+                </div>
+            </div>
+        `;
     }
 
     getInverterStatus(status) {
@@ -460,10 +596,92 @@ class NTURTDashboard {
                 }
             });
         }
+
+        // Initialize Cell Voltage Chart
+        const cellVoltageCtx = document.getElementById('cell-voltage-chart');
+        if (cellVoltageCtx) {
+            this.cellVoltageChart = new Chart(cellVoltageCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5', 'Group 6', 'Group 7'],
+                    datasets: [{
+                        label: 'Voltage Sum (V)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: 'rgba(234, 179, 8, 0.6)',
+                        borderColor: '#eab308',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Voltage (V)',
+                                color: '#e2e8f0'
+                            }
+                        }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+
+        // Initialize Cell Temperature Chart
+        const cellTempCtx = document.getElementById('cell-temperature-chart');
+        if (cellTempCtx) {
+            this.cellTempChart = new Chart(cellTempCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Group 1', 'Group 2', 'Group 3', 'Group 4', 'Group 5', 'Group 6', 'Group 7'],
+                    datasets: [{
+                        label: 'Temperature Avg (°C)',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: 'rgba(249, 115, 22, 0.6)',
+                        borderColor: '#f97316',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e2e8f0' } }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        },
+                        y: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)',
+                                color: '#e2e8f0'
+                            }
+                        }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
     }
 
     updateCharts(data) {
-        const currentTime = new Date().toLocaleTimeString();
+        const currentTime = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString();
         
         // Update Torque Chart
         if (this.torqueChart && data.inverters) {
@@ -515,6 +733,19 @@ class NTURTDashboard {
             }
             
             this.rpmChart.update('none');
+        }
+        // Update Cell Voltage Chart
+        if (this.cellVoltageChart && data.accumulator && data.accumulator.cell_voltages) {
+            const voltageGroups = this.processCellVoltages(data.accumulator.cell_voltages);
+            this.cellVoltageChart.data.datasets[0].data = voltageGroups;
+            this.cellVoltageChart.update('none');
+        }
+
+        // Update Cell Temperature Chart
+        if (this.cellTempChart && data.accumulator && data.accumulator.cell_temperatures) {
+            const tempGroups = this.processCellTemperatures(data.accumulator.cell_temperatures);
+            this.cellTempChart.data.datasets[0].data = tempGroups;
+            this.cellTempChart.update('none');
         }
     }
 
@@ -738,6 +969,14 @@ class NTURTDashboard {
             const response = await fetch(endpoint, { method: 'POST' });
             const result = await response.json();
             
+            const playPauseBtn = document.getElementById('play-pause-btn');
+            if (playPauseBtn) {
+            const isPaused = !status.is_paused;
+                playPauseBtn.textContent = isPaused ? '▶️ PLAY' : '⏸️ STOP';
+                playPauseBtn.className = isPaused ?
+                    'px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-medium transition-colors' :
+                    'px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-colors';
+            }
             console.log('Play/Pause result:', result);
         } catch (error) {
             console.error('Failed to toggle play/pause:', error);
@@ -838,6 +1077,120 @@ class NTURTDashboard {
             fileSelect.value = control.current_file;
         }
     }
+
+    processCellVoltages(voltages) {
+        const groups = [];
+        for (let i = 0; i < 7; i++) {
+            let sum = 0;
+            let count = 0;
+            const startIndex = i * 15;
+            const endIndex = Math.min(startIndex + 15, voltages.length);
+            
+            for (let j = startIndex; j < endIndex; j++) {
+                if (voltages[j] !== null && voltages[j] !== undefined && voltages[j] !== -13) {
+                    sum += voltages[j];
+                    count++;
+                }
+            }
+            groups.push(count > 0 ? sum : 0);
+        }
+        return groups;
+    }
+
+    processCellTemperatures(temperatures) {
+        const groups = [];
+        for (let i = 0; i < 7; i++) {
+            let sum = 0;
+            let count = 0;
+            const startIndex = i * 32;
+            const endIndex = Math.min(startIndex + 32, temperatures.length);
+            
+            for (let j = startIndex; j < endIndex; j++) {
+                if (temperatures[j] !== null && temperatures[j] !== undefined && temperatures[j] !== -13) {
+                    sum += temperatures[j];
+                    count++;
+                }
+            }
+            groups.push(count > 0 ? sum / count : 0);
+        }
+        return groups;
+    }
+
+    formatInverterStatus(status) {
+        if (status === null || status === undefined) {
+            return '<span class="status-unknown">N/A</span>';
+        }
+        
+        let INVready = false;
+        let INVenabled = false;
+        let INVfault = false;
+        let HV = false;
+        
+        for (let i = 0; i < 8; i++) {
+            if ((status[0] >> i) & 0x01) {
+                switch (i) {
+                    case 1:
+                        INVready = true;
+                        break;
+                    case 2:
+                        INVenabled = true;
+                        break;
+                    case 3:
+                        INVfault = true;
+                        break;
+                    case 4:
+                        HV = true;
+                        break;
+                }
+            }
+        }
+        
+        let statusText3 = '';
+        let ERRORstatus = status[1];
+        
+        switch (ERRORstatus) {
+            case 0x0000:
+                statusText3 = 'ERROR_NONE';
+                break;
+            case 0x0001:
+                statusText3 = 'ERROR_INSTANT_OC';
+                break;
+            case 0x0002:
+                statusText3 = 'ERROR_RMS_OC';
+                break;
+            case 0x0003:
+                statusText3 = 'ERROR_INV_OT';
+                break;
+            case 0x0004:
+                statusText3 = 'ERROR_MOT_OT';
+                break;
+            case 0x0005:
+                statusText3 = 'ERROR_ENC';
+                break;
+            case 0x0006:
+                statusText3 = 'ERROR_CAN_OT';
+                break;
+            case 0x0007:
+                statusText3 = 'ERROR_GATE';
+                break;
+            case 0x0008:
+                statusText3 = 'ERROR_HW_OC';
+                break;
+            default:
+                statusText3 = 'Unknown Error';
+                break;
+        }
+        
+        return {
+            ready: INVready,
+            enabled: INVenabled,
+            fault: INVfault,
+            hv: HV,
+            errorText: statusText3,
+            errorCode: ERRORstatus
+        };
+    }
+
     // Clean up resources
     destroy() {
         if (this.websocket) {
@@ -848,6 +1201,12 @@ class NTURTDashboard {
         }
         if (this.rpmChart) {
             this.rpmChart.destroy();
+        }
+        if (this.cellVoltageChart) {
+            this.cellVoltageChart.destroy();
+        }
+        if (this.cellTempChart) {
+            this.cellTempChart.destroy();
         }
     }
 }

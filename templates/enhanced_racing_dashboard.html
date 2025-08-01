@@ -213,6 +213,73 @@
             </div>
         </div>
 
+        <!-- Battery Information Bar -->
+        <div class="bg-slate-800 rounded-xl p-4 mb-6 shadow-lg">
+            <h3 class="text-lg font-bold text-white mb-3 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33V20c0 .73.6 1.33 1.33 1.33h8.34c.73 0 1.33-.6 1.33-1.33V5.33C18 4.6 17.4 4 16.67 4z"/>
+                </svg>
+                Battery Status
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- State of Charge -->
+                <div class="bg-slate-700 rounded-lg p-3">
+                    <div class="text-sm text-gray-300 mb-1">State of Charge</div>
+                    <div class="bg-slate-600 rounded-full h-4 mb-2 overflow-hidden">
+                        <div id="battery-soc-bar" class="battery-bar bg-green-500 h-full rounded transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span id="battery-soc-value" class="text-white font-bold text-lg">0%</span>
+                        <span class="text-xs text-gray-400">SOC</span>
+                    </div>
+                </div>
+
+                <!-- Battery Temperature -->
+                <div class="bg-slate-700 rounded-lg p-3">
+                    <div class="text-sm text-gray-300 mb-1">Temperature</div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div id="battery-temp-value" class="text-green-400 font-bold text-xl">--°C</div>
+                            <div class="text-xs text-gray-400">Pack Temp</div>
+                        </div>
+                        <svg class="w-8 h-8 text-orange-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M15 13V5c0-1.66-1.34-3-3-3S9 3.34 9 5v8c-1.21.91-2 2.37-2 4 0 2.76 2.24 5 5 5s5-2.24 5-5c0-1.63-.79-3.09-2-4zM11 5c0-.55.45-1 1-1s1 .45 1 1h-2v0zm4 12c0 1.66-1.34 3-3 3s-3-1.34-3-3c0-1 .49-1.88 1.24-2.42L11 14V6h2v8l.76.58C14.51 15.12 15 16 15 17z"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Total Cell Voltage -->
+                <div class="bg-slate-700 rounded-lg p-3">
+                    <div class="text-sm text-gray-300 mb-1">Cell Voltage Sum</div>
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div id="battery-voltage-value" class="text-blue-400 font-bold text-xl">--V</div>
+                            <div id="battery-cells-count" class="text-xs text-gray-400">0 cells</div>
+                        </div>
+                        <svg class="w-8 h-8 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M14.5 7.5V6c0-.55-.45-1-1-1h-3c-.55 0-1 .45-1 1v1.5h5zm-5 8V18c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-2.5h-5zM7 9v6h1.5V9H7zm8.5 0v6H17V9h-1.5z"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Pack Voltage & Current -->
+                <div class="bg-slate-700 rounded-lg p-3">
+                    <div class="text-sm text-gray-300 mb-1">Pack Status</div>
+                    <div class="space-y-1">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-400">Voltage:</span>
+                            <span id="battery-pack-voltage" class="text-purple-400 font-bold">--V</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-400">Current:</span>
+                            <span id="battery-current-value" class="text-orange-400 font-bold">--A</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Main Dashboard Layout -->
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
             <!-- Speed & Primary Metrics -->
@@ -826,6 +893,83 @@
             }
         }
 
+        function updateBatteryInfoBar(accumulator) {
+            if (!accumulator) return;
+            
+            // Update SOC (State of Charge)
+            const socElement = document.getElementById('battery-soc-value');
+            const socBarElement = document.getElementById('battery-soc-bar');
+            if (accumulator.soc !== null && accumulator.soc !== undefined) {
+                const socPercent = Math.max(0, Math.min(100, accumulator.soc));
+                if (socElement) socElement.textContent = `${socPercent}%`;
+                if (socBarElement) {
+                    socBarElement.style.width = `${socPercent}%`;
+                    // 根據電量變更顏色
+                    if (socPercent > 50) {
+                        socBarElement.className = 'battery-bar bg-green-500 h-full rounded transition-all duration-300';
+                    } else if (socPercent > 20) {
+                        socBarElement.className = 'battery-bar bg-yellow-500 h-full rounded transition-all duration-300';
+                    } else {
+                        socBarElement.className = 'battery-bar bg-red-500 h-full rounded transition-all duration-300';
+                    }
+                }
+            }
+            
+            // Update Battery Temperature
+            const tempElement = document.getElementById('battery-temp-value');
+            if (accumulator.temperature !== null && accumulator.temperature !== undefined && tempElement) {
+                tempElement.textContent = `${accumulator.temperature.toFixed(1)}°C`;
+                // 根據溫度變更顏色
+                if (accumulator.temperature > 60) {
+                    tempElement.className = 'text-red-400 font-bold text-xl';
+                } else if (accumulator.temperature > 45) {
+                    tempElement.className = 'text-yellow-400 font-bold text-xl';
+                } else {
+                    tempElement.className = 'text-green-400 font-bold text-xl';
+                }
+            }
+            
+            // Calculate and update Total Voltage (sum of all cell voltages)
+            const voltageElement = document.getElementById('battery-voltage-value');
+            const cellCountElement = document.getElementById('battery-cells-count');
+            if (accumulator.cell_voltages && Array.isArray(accumulator.cell_voltages)) {
+                let totalVoltage = 0;
+                let validCells = 0;
+                
+                accumulator.cell_voltages.forEach(voltage => {
+                    if (voltage !== null && voltage !== undefined && voltage !== -13 && voltage > 0) {
+                        totalVoltage += voltage;
+                        validCells++;
+                    }
+                });
+                
+                if (voltageElement) {
+                    voltageElement.textContent = `${totalVoltage.toFixed(1)}V`;
+                }
+                if (cellCountElement) {
+                    cellCountElement.textContent = `${validCells} cells`;
+                }
+            }
+            
+            // Update Pack Voltage from direct reading
+            const packVoltageElement = document.getElementById('battery-pack-voltage');
+            if (accumulator.voltage !== null && accumulator.voltage !== undefined && packVoltageElement) {
+                packVoltageElement.textContent = `${accumulator.voltage.toFixed(1)}V`;
+            }
+            
+            // Update Current
+            const currentElement = document.getElementById('battery-current-value');
+            if (accumulator.current !== null && accumulator.current !== undefined && currentElement) {
+                currentElement.textContent = `${accumulator.current.toFixed(2)}A`;
+                // 根據電流方向變更顏色 (正值充電，負值放電)
+                if (accumulator.current > 0) {
+                    currentElement.className = 'text-green-400 font-bold';
+                } else {
+                    currentElement.className = 'text-orange-400 font-bold';
+                }
+            }
+        }
+
         function updateGPSMap(lat, lon) {
             if (lat !== null && lon !== null && lat !== undefined && lon !== undefined && 
                 !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
@@ -940,6 +1084,9 @@
                 updateCellSegments(data);
                 updateHeartbeat('acc-heartbeat', data.accumulator.heartbeat);
                 updateHeartbeat('sys-acc-heartbeat', data.accumulator.heartbeat);
+                
+                // Update Battery Information Bar
+                updateBatteryInfoBar(data.accumulator);
             }
             
             // Update inverter data

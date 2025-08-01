@@ -28,9 +28,10 @@ app.add_middleware(
 
 USE_CSV = True
 # CSV_FILE = '../LOGS/can_log_20250727_112357.csv'
-CSV_FILE = "../LOGS/can_log_20250731_004450.csv"
+CSV_FILE = "../LOGS/can_log_20250731_00445.csv"
 CSV_SPEED = 1.0
 PORT = 8000
+DIRBASE = "../LOGS/"
 
 templates = Jinja2Templates(directory="templates")
 
@@ -295,7 +296,7 @@ class CanReceiverWebApp:
         """切換 CSV 檔案"""
         import os
         
-        new_file_path = os.path.join("../LOGS/", filename)
+        new_file_path = os.path.join(DIRBASE, filename)
         if not os.path.exists(new_file_path):
             print(f"CSV file not found: {new_file_path}")
             return False
@@ -806,15 +807,15 @@ can_receiver = None
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/gps", response_class=HTMLResponse)
 async def read_index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("gps_dashboard.html", {"request": request})
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
 
-@app.get("/main", response_class=HTMLResponse)
+@app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("enhanced_racing_dashboard.html", {"request": request})
 

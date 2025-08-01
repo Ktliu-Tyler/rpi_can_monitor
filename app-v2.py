@@ -13,6 +13,9 @@ import json
 import threading
 from typing import List
 import csv
+import os
+
+
 
 app = FastAPI()
 app.add_middleware(
@@ -25,9 +28,10 @@ app.add_middleware(
 
 USE_CSV = True
 # CSV_FILE = '../LOGS/can_log_20250727_112357.csv'
-CSV_FILE = "../LOGS/can_log_20250731_004450.csv"
+CSV_FILE = "../LOGS/can_log_20250731_00445.csv"
 CSV_SPEED = 1.0
 PORT = 8000
+DIRBASE = "../LOGS/"
 
 templates = Jinja2Templates(directory="templates")
 
@@ -40,6 +44,11 @@ class CanReceiverWebApp:
         self.csv_file = csv_file
         self.csv_speed = csv_speed
         self.index = 0
+        self.is_paused = False
+        self.playback_speed = 1.0
+        self.current_csv_file = csv_file
+        self.available_csv_files = self.scan_csv_files()
+        self.total_csv_messages = 0
         
         # 運行標誌
         self.running = True
@@ -194,11 +203,148 @@ class CanReceiverWebApp:
             print(f"Error loading CSV file: {e}")
             self.csv_data = []
 
+    def scan_csv_files(self):
+        """掃描可用的 CSV 檔案"""
+        import os
+        import glob
+        
+        csv_dir = "../LOGS/"
+        if os.path.exists(csv_dir):
+            files = glob.glob(os.path.join(csv_dir, "*.csv"))
+            return [os.path.basename(f) for f in files]
+        return []
+
+    def pause_playback(self):
+        """暫停播放"""
+        self.is_paused = True
+        print("Playback paused")
+
+    def resume_playback(self):
+        """恢復播放"""
+        self.is_paused = False
+        # 重新設定時間基準點以避免時間跳躍
+        if self.csv_start_time and self.csv_index < len(self.csv_data):
+            current_time = time.time()
+            elapsed_time = (self.csv_data[self.csv_index]['timestamp'] - self.csv_base_timestamp) / 1000000
+            self.csv_start_time = current_time - (elapsed_time / self.playback_speed)
+        print("Playback resumed")
+
+    def set_playback_speed(self, speed):
+        """設定播放速度"""
+        if speed > 0:
+            # 調整時間基準點以保持連續性
+            if self.csv_start_time and not self.is_paused:
+                current_time = time.time()
+                elapsed_time = (current_time - self.csv_start_time) * self.playback_speed
+                self.csv_start_time = current_time - (elapsed_time / speed)
+            
+            self.playback_speed = speed
+            print(f"Playback speed set to {speed}x")
+
+    def jump_to_percentage(self, percentage):
+        """跳到指定百分比位置"""
+        if not self.csv_data:
+            return False
+        
+        percentage = max(0, min(100, percentage))
+        target_index = int(len(self.csv_data) * percentage / 100)
+        
+        self.csv_index = target_index
+        if self.csv_index < len(self.csv_data):
+            current_time = time.time()
+            elapsed_time = (self.csv_data[self.csv_index]['timestamp'] - self.csv_base_timestamp) / 1000000
+            self.csv_start_time = current_time - (elapsed_time / self.playback_speed)
+        
+        print(f"Jumped to {percentage}% ({self.csv_index}/{len(self.csv_data)})")
+        return True
+
+    def jump_time(self, seconds):
+        """前進或後退指定秒數"""
+        if not self.csv_data or not self.csv_start_time:
+            return False
+        
+        # 計算目標時間戳
+        current_timestamp = self.csv_data[self.csv_index]['timestamp'] if self.csv_index < len(self.csv_data) else self.csv_data[-1]['timestamp']
+        target_timestamp = current_timestamp + (seconds * 1000000)  # 轉換為微秒
+        
+        # 找到最接近的索引
+        target_index = self.csv_index
+        if seconds > 0:  # 前進
+            for i in range(self.csv_index, len(self.csv_data)):
+                if self.csv_data[i]['timestamp'] >= target_timestamp:
+                    target_index = i
+                    break
+            else:
+                target_index = len(self.csv_data) - 1
+        else:  # 後退
+            for i in range(self.csv_index, -1, -1):
+                if self.csv_data[i]['timestamp'] <= target_timestamp:
+                    target_index = i
+                    break
+            else:
+                target_index = 0
+        
+        self.csv_index = target_index
+        current_time = time.time()
+        elapsed_time = (self.csv_data[self.csv_index]['timestamp'] - self.csv_base_timestamp) / 1000000
+        self.csv_start_time = current_time - (elapsed_time / self.playback_speed)
+        
+        print(f"Jumped {seconds}s to index {self.csv_index}")
+        return True
+
+    def switch_csv_file(self, filename):
+        """切換 CSV 檔案"""
+        import os
+        
+        new_file_path = os.path.join(DIRBASE, filename)
+        if not os.path.exists(new_file_path):
+            print(f"CSV file not found: {new_file_path}")
+            return False
+        
+        self.current_csv_file = new_file_path
+        self.csv_file = new_file_path
+        self.csv_data = []
+        self.csv_index = 0
+        self.csv_start_time = None
+        self.csv_base_timestamp = None
+        self.is_paused = False
+        
+        # 重新載入檔案
+        self.load_csv_file()
+        print(f"Switched to CSV file: {filename}")
+        return True
+
+    def get_playback_status(self):
+        """獲取播放狀態"""
+        progress = 0
+        if self.csv_data:
+            progress = (self.csv_index / len(self.csv_data)) * 100
+        
+        current_time_str = "00:00"
+        total_time_str = "00:00"
+        
+        if self.csv_data and self.csv_base_timestamp:
+            if self.csv_index < len(self.csv_data):
+                current_seconds = (self.csv_data[self.csv_index]['timestamp'] - self.csv_base_timestamp) / 1000000
+                current_time_str = f"{int(current_seconds//60):02d}:{int(current_seconds%60):02d}"
+            
+            total_seconds = (self.csv_data[-1]['timestamp'] - self.csv_base_timestamp) / 1000000
+            total_time_str = f"{int(total_seconds//60):02d}:{int(total_seconds%60):02d}"
+        
+        return {
+            'is_paused': self.is_paused,
+            'speed': self.playback_speed,
+            'current_file': os.path.basename(self.current_csv_file) if self.current_csv_file else None,
+            'progress': progress,
+            'current_time': current_time_str,
+            'total_time': total_time_str,
+            'available_files': self.available_csv_files
+        }
+
     async def broadcast_data(self):
         """廣播數據到所有連接的客戶端"""
         if not connections:
             return
-            
         broadcast_data = {
             'timestamp': self.data_store['timestamp']['time'].isoformat() if self.data_store['timestamp']['time'] else None,
             'gps': self.data_store['gps'],
@@ -207,7 +353,8 @@ class CanReceiverWebApp:
             'inverters': self.data_store['inverters'],
             'vcu': self.data_store['vcu'],
             'message_count': self.message_count,
-            'update_time': datetime.now().isoformat()
+            'update_time': datetime.now().isoformat(),
+            'playback_control': self.get_playback_status() 
         }
         
         # 發送到所有連接的客戶端
@@ -244,14 +391,19 @@ class CanReceiverWebApp:
 
     async def csv_receive_callback(self):
         """CSV 模式的接收回調函數 (async)"""
+        if self.is_paused:
+            await asyncio.sleep(0.1)
+            return
+            
         if self.csv_index >= len(self.csv_data):
             await asyncio.sleep(0.01)
-            return  # 已經播放完畢
+            return 
+        
         current_time = time.time()
         if self.csv_start_time is None:
             self.csv_start_time = current_time
             self.csv_base_timestamp = self.csv_data[0]['timestamp']
-        elapsed_time = (current_time - self.csv_start_time) * self.csv_speed
+        elapsed_time = (current_time - self.csv_start_time) * self.csv_speed * self.playback_speed
         target_timestamp = self.csv_base_timestamp + elapsed_time * 1000000  # 轉換為微秒
         updated = False
         while (self.csv_index < len(self.csv_data) and 
@@ -650,6 +802,11 @@ class CanReceiverWebApp:
 # global CAN receiver instance
 can_receiver = None
 
+
+
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 @app.get("/", response_class=HTMLResponse)
 async def read_index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -660,7 +817,7 @@ async def dashboard(request: Request):
 
 @app.get("/main", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse("enhanced_dashboard.html", {"request": request})
+    return templates.TemplateResponse("enhanced_racing_dashboard.html", {"request": request})
 
 
 @app.get('/api/data')
@@ -703,6 +860,65 @@ async def start_can_receiver():
 async def startup_event():
     # 啟動 CAN 接收器任務
     asyncio.create_task(start_can_receiver())
+
+@app.post('/api/control/pause')
+async def pause_playback():
+    if can_receiver:
+        can_receiver.pause_playback()
+        return {'status': 'paused'}
+    return {'error': 'CAN receiver not initialized'}
+
+@app.post('/api/control/resume')
+async def resume_playback():
+    if can_receiver:
+        can_receiver.resume_playback()
+        return {'status': 'resumed'}
+    return {'error': 'CAN receiver not initialized'}
+
+@app.post('/api/control/speed')
+async def set_speed(request: Request):
+    data = await request.json()
+    speed = data.get('speed', 1.0)
+    if can_receiver:
+        can_receiver.set_playback_speed(speed)
+        return {'status': f'speed set to {speed}x'}
+    return {'error': 'CAN receiver not initialized'}
+
+@app.post('/api/control/jump')
+async def jump_playback(request: Request):
+    data = await request.json()
+    if 'percentage' in data:
+        percentage = data['percentage']
+        if can_receiver and can_receiver.jump_to_percentage(percentage):
+            return {'status': f'jumped to {percentage}%'}
+    elif 'seconds' in data:
+        seconds = data['seconds']
+        if can_receiver and can_receiver.jump_time(seconds):
+            return {'status': f'jumped {seconds} seconds'}
+    return {'error': 'Invalid jump request'}
+
+@app.post('/api/control/switch-file')
+async def switch_file(request: Request):
+    data = await request.json()
+    filename = data.get('filename')
+    if can_receiver and filename:
+        if can_receiver.switch_csv_file(filename):
+            return {'status': f'switched to {filename}'}
+        else:
+            return {'error': f'Failed to switch to {filename}'}
+    return {'error': 'Invalid file switch request'}
+
+@app.get('/api/control/status')
+async def get_control_status():
+    if can_receiver:
+        return can_receiver.get_playback_status()
+    return {'error': 'CAN receiver not initialized'}
+
+@app.get('/api/control/files')
+async def get_available_files():
+    if can_receiver:
+        return {'files': can_receiver.available_csv_files}
+    return {'error': 'CAN receiver not initialized'}
 
 if __name__ == '__main__':
     print("Starting NTURT CAN Monitor Web Application...")
