@@ -280,8 +280,18 @@
                     <p class="text-slate-400 mt-2">Real-time GPS & Navigation System</p>
                 </div>
                 <div class="text-right">
-                    <div class="digital-clock text-cyan-400" id="current-time">00:00:00</div>
-                    <div class="text-xs text-slate-500" id="current-date">Loading...</div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <div class="text-xs text-slate-400 mb-1">System Time</div>
+                            <div class="digital-clock text-cyan-400" id="current-time">00:00:00</div>
+                            <div class="text-xs text-slate-500" id="current-date">Loading...</div>
+                        </div>
+                        <div>
+                            <div class="text-xs text-slate-400 mb-1">Data Time</div>
+                            <div class="digital-clock text-orange-400" id="data-time">--:--:--</div>
+                            <div class="text-xs text-slate-500" id="data-date">No Data</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -561,6 +571,8 @@
                             grid: { color: 'rgba(148, 163, 184, 0.1)' }
                         },
                         y: {
+                            min: 0,
+                            max: 70,
                             ticks: { color: '#94a3b8' },
                             grid: { color: 'rgba(148, 163, 184, 0.1)' },
                             beginAtZero: true
@@ -621,6 +633,29 @@
 
         function updateGPSDisplay(data) {
             try {
+                // Update data timestamp
+                if (data.timestamp) {
+                    const dataTime = new Date(data.timestamp);
+                    const dataTimeString = dataTime.toLocaleTimeString('zh-TW', { 
+                        hour12: false,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                    const dataDateString = dataTime.toLocaleDateString('zh-TW', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    document.getElementById('data-time').textContent = dataTimeString;
+                    document.getElementById('data-date').textContent = dataDateString;
+                } else {
+                    document.getElementById('data-time').textContent = '--:--:--';
+                    document.getElementById('data-date').textContent = 'No Data';
+                }
+
                 // Update GPS coordinates
                 if (data.gps) {
                     document.getElementById('gps-lat').textContent = formatValue(data.gps.lat, '°', 7);
@@ -630,7 +665,7 @@
                         `<span class="status-ok">ACTIVE</span>` : '<span class="status-bad">NO FIX</span>';
                     
                     // Simulate satellite count (you can replace this with real data)
-                    document.getElementById('gps-satellites').textContent = Math.floor(Math.random() * 12) + 4;
+                    document.getElementById('gps-satellites').textContent = "NO DATA";
                     
                     updateMapPosition(data.gps.lat, data.gps.lon);
                     calculateDistance(data.gps.lat, data.gps.lon);

@@ -342,6 +342,37 @@ body {
     background: #059669;
 }
 
+/* Mode toggle button special styling */
+#mode-toggle-btn {
+    min-width: 100px;
+    font-weight: 600;
+    border: 2px solid transparent;
+}
+
+#mode-toggle-btn.secondary {
+    background: linear-gradient(45deg, #dc2626, #b91c1c);
+    border-color: #dc2626;
+}
+
+#mode-toggle-btn.secondary:hover {
+    background: linear-gradient(45deg, #b91c1c, #991b1b);
+    border-color: #b91c1c;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+}
+
+#mode-toggle-btn.primary {
+    background: linear-gradient(45deg, #059669, #047857);
+    border-color: #059669;
+}
+
+#mode-toggle-btn.primary:hover {
+    background: linear-gradient(45deg, #047857, #065f46);
+    border-color: #047857;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+}
+
 .control-label {
     color: #94a3b8;
     font-size: 12px;
@@ -550,6 +581,27 @@ body {
     opacity: 0.8;
 }
 
+#mode-toggle-btn {
+    min-width: 100px;
+    font-size: 11px;
+}
+
+#mode-toggle-btn.primary {
+    background: #059669;
+}
+
+#mode-toggle-btn.primary:hover {
+    background: #047857;
+}
+
+#mode-toggle-btn.secondary {
+    background: #7c2d12;
+}
+
+#mode-toggle-btn.secondary:hover {
+    background: #991b1b;
+}
+
 @keyframes statusPulse {
     0%, 100% { 
         opacity: 1; 
@@ -610,3 +662,47 @@ body {
 .status-ok { color: #10b981; font-weight: bold; text-shadow: 0 0 10px #10b981; }
 .status-bad { color: #ef4444; font-weight: bold; text-shadow: 0 0 10px #ef4444; }
 .status-unknown { color: #6b7280; }
+
+/* CAN Logging Status Indicators */
+.status-indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: inline-block;
+    animation: statusPulse 2s infinite;
+    box-shadow: 0 0 10px currentColor;
+}
+
+.status-indicator.recording {
+    background: #ef4444;
+    color: #ef4444;
+    box-shadow: 0 0 15px #ef4444;
+}
+
+.status-indicator.idle {
+    background: #6b7280;
+    color: #6b7280;
+    box-shadow: 0 0 8px #6b7280;
+    animation: none;
+}
+
+/* CAN Logging 按鈕特殊樣式 */
+#start-logging-btn {
+    background: linear-gradient(45deg, #10b981, #059669);
+    border: 1px solid #10b981;
+}
+
+#start-logging-btn:hover {
+    background: linear-gradient(45deg, #059669, #047857);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+}
+
+#stop-logging-btn {
+    background: linear-gradient(45deg, #ef4444, #dc2626);
+    border: 1px solid #ef4444;
+}
+
+#stop-logging-btn:hover {
+    background: linear-gradient(45deg, #dc2626, #b91c1c);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}

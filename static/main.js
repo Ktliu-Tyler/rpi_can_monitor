@@ -26,7 +26,8 @@ class NTURTDashboard {
 
         this.initPlaybackControls();
         this.loadAvailableFiles();
-        
+        this.loadCurrentMode();
+        this.loadCanLoggingStatus();
         console.log('NTURT Dashboard initialized');
     }
 
@@ -123,6 +124,9 @@ class NTURTDashboard {
             
             // Update charts with new data
             this.updateCharts(data);
+            
+            // Update CAN logging status
+            this.updateCanLoggingStatus(data.canlogging);
             
             // Update playback controls if available
             this.updatePlaybackControls(data);
@@ -237,8 +241,8 @@ class NTURTDashboard {
         if (!vcu) return;
         
         // Update APPS bar and value
-        if (vcu.apps1 !== null && vcu.apps1 !== undefined) {
-            const appsPercent = Math.max(0, Math.min(100, vcu.apps1));
+        if (vcu.accel !== null && vcu.accel !== undefined) {
+            const appsPercent = vcu.accel;
             const appsFill = document.getElementById('apps-fill');
             const appsValue = document.getElementById('apps-value');
             
@@ -898,7 +902,14 @@ class NTURTDashboard {
                 this.togglePlayPause();
             });
         }
-        
+                
+        const modeToggleBtn = document.getElementById('mode-toggle-btn');
+        if (modeToggleBtn) {
+            modeToggleBtn.addEventListener('click', () => {
+                this.toggleMode();
+            });
+        }
+
         const backwardBtn = document.getElementById('backward-btn');
         if (backwardBtn) {
             backwardBtn.addEventListener('click', () => {
@@ -935,6 +946,174 @@ class NTURTDashboard {
                 this.jumpToPercentage(parseFloat(e.target.value));
             });
         }
+        
+        // CAN Logging 控制按鈕
+        const startLoggingBtn = document.getElementById('start-logging-btn');
+        if (startLoggingBtn) {
+            startLoggingBtn.addEventListener('click', () => {
+                this.startCanLogging();
+            });
+        }
+        
+        const stopLoggingBtn = document.getElementById('stop-logging-btn');
+        if (stopLoggingBtn) {
+            stopLoggingBtn.addEventListener('click', () => {
+                this.stopCanLogging();
+            });
+        }
+    }
+
+    async toggleMode() {
+        try {
+            // 先獲取當前模式
+            const modeResponse = await fetch('/api/control/mode');
+            const currentMode = await modeResponse.json();
+            
+            const newMode = !currentMode.use_csv; // 切換到相反模式
+            
+            const response = await fetch('/api/control/switch-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ use_csv: newMode })
+            });
+            
+            const result = await response.json();
+            
+            if (result.status) {
+                console.log('Mode switch result:', result);
+                // 更新按鈕顯示
+                this.updateModeButton(newMode);
+                
+                // 如果切換到 CSV 模式，刷新檔案選擇器
+                if (newMode) {
+                    await this.refreshFileSelector();
+                }
+            } else {
+                console.error('Failed to switch mode:', result.error);
+                await this.refreshFileSelector();
+            }
+        } catch (error) {
+            console.error('Failed to toggle mode:', error);
+            await this.refreshFileSelector();
+        }
+    }
+
+    async loadCurrentMode() {
+        try {
+            const response = await fetch('/api/control/mode');
+            const mode = await response.json();
+            
+            if (!mode.error) {
+                this.updateModeButton(mode.use_csv);
+                
+                // 如果是 CAN 模式但 CAN 不可用，顯示警告
+                if (!mode.use_csv && !mode.can_available) {
+                    console.warn('CAN mode selected but CAN interface not available');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load current mode:', error);
+        }
+    }
+
+    updateCanLoggingStatus(canloggingData) {
+        if (!canloggingData) return;
+        
+        // 更新記錄狀態指示器
+        const statusIndicator = document.getElementById('canlogging-status');
+        const statusText = document.getElementById('canlogging-status-text');
+        const startTimeText = document.getElementById('canlogging-start-time');
+        
+        if (statusIndicator && statusText) {
+            if (canloggingData.is_recording) {
+                statusIndicator.className = 'status-indicator recording';
+                statusText.textContent = 'RECORDING';
+            } else {
+                statusIndicator.className = 'status-indicator idle';
+                statusText.textContent = 'IDLE';
+            }
+        }
+        
+        // 更新開始時間
+        if (startTimeText) {
+            if (canloggingData.start_time) {
+                startTimeText.textContent = `Started: ${canloggingData.start_time}`;
+            } else {
+                startTimeText.textContent = 'No active recording';
+            }
+        }
+    }
+
+    async startCanLogging() {
+        try {
+            const response = await fetch('/api/canlogging/start', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                console.log('CAN logging started:', result.message);
+                // 可以添加成功提示
+            } else {
+                console.error('Failed to start CAN logging:', result.message);
+                // 可以添加錯誤提示
+            }
+        } catch (error) {
+            console.error('Error starting CAN logging:', error);
+        }
+    }
+
+    async stopCanLogging() {
+        try {
+            const response = await fetch('/api/canlogging/stop', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                console.log('CAN logging stopped:', result.message);
+                // 可以添加成功提示
+            } else {
+                console.error('Failed to stop CAN logging:', result.message);
+                // 可以添加錯誤提示
+            }
+        } catch (error) {
+            console.error('Error stopping CAN logging:', error);
+        }
+    }
+
+    async loadCanLoggingStatus() {
+        try {
+            const response = await fetch('/api/canlogging/status');
+            const status = await response.json();
+            
+            if (!status.error) {
+                // 手動調用 updateCanLoggingStatus 來初始化顯示
+                const mockData = {
+                    is_recording: status.is_recording,
+                    start_time: status.start_time,
+                    start_timestamp: status.start_timestamp
+                };
+                this.updateCanLoggingStatus(mockData);
+            }
+        } catch (error) {
+            console.error('Failed to load CAN logging status:', error);
+        }
+    }
+
+    updateModeButton(useCsv) {
+        const modeToggleBtn = document.getElementById('mode-toggle-btn');
+        if (modeToggleBtn) {
+            if (useCsv) {
+                modeToggleBtn.textContent = '📁 CSV Mode';
+                modeToggleBtn.className = 'control-btn secondary';
+                modeToggleBtn.title = 'Click to switch to CAN mode';
+            } else {
+                modeToggleBtn.textContent = '🔌 CAN Mode';
+                modeToggleBtn.className = 'control-btn primary';
+                modeToggleBtn.title = 'Click to switch to CSV mode';
+            }
+        }
     }
 
     async loadAvailableFiles() {
@@ -956,6 +1135,36 @@ class NTURTDashboard {
             }
         } catch (error) {
             console.error('Failed to load available files:', error);
+        }
+    }
+
+    async refreshFileSelector() {
+        try {
+            // 先刷新後端的檔案列表
+            const refreshResponse = await fetch('/api/control/refresh-files', {
+                method: 'POST'
+            });
+            const refreshResult = await refreshResponse.json();
+            
+            if (refreshResult.status) {
+                console.log(`Files refreshed: ${refreshResult.count} files found`);
+                
+                // 然後更新前端的選擇器
+                const fileSelect = document.getElementById('file-select');
+                if (fileSelect && refreshResult.files) {
+                    fileSelect.innerHTML = '';
+                    refreshResult.files.forEach(file => {
+                        const option = document.createElement('option');
+                        option.value = file;
+                        option.textContent = file;
+                        fileSelect.appendChild(option);
+                    });
+                }
+            } else {
+                console.error('Failed to refresh files:', refreshResult.error);
+            }
+        } catch (error) {
+            console.error('Failed to refresh file selector:', error);
         }
     }
 
@@ -1207,6 +1416,89 @@ class NTURTDashboard {
         }
         if (this.cellTempChart) {
             this.cellTempChart.destroy();
+        }
+    }
+
+    // CAN Logging Methods
+    updateCanLoggingStatus(canlogging) {
+        if (!canlogging) return;
+        
+        const statusElement = document.getElementById('canlogging-status');
+        const statusTextElement = document.getElementById('canlogging-status-text');
+        const startTimeElement = document.getElementById('canlogging-start-time');
+        
+        if (statusElement && statusTextElement) {
+            if (canlogging.is_recording) {
+                statusElement.className = 'status-indicator recording';
+                statusTextElement.textContent = 'RECORDING';
+                statusTextElement.className = 'text-lg font-bold text-red-400';
+            } else {
+                statusElement.className = 'status-indicator idle';
+                statusTextElement.textContent = 'IDLE';
+                statusTextElement.className = 'text-lg font-bold text-slate-300';
+            }
+        }
+        
+        if (startTimeElement) {
+            if (canlogging.start_time) {
+                const startTime = new Date(canlogging.start_time + 'Z'); // 確保時區正確
+                startTimeElement.textContent = `Recording started: ${startTime.toLocaleString()}`;
+                startTimeElement.className = 'text-sm text-green-400';
+            } else {
+                startTimeElement.textContent = 'No active recording';
+                startTimeElement.className = 'text-sm text-slate-400';
+            }
+        }
+    }
+
+    async startCanLogging() {
+        try {
+            const response = await fetch('/api/canlogging/start', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                console.log('CAN logging started:', result.message);
+                // 可以添加成功提示
+            } else {
+                console.error('Failed to start CAN logging:', result.message);
+                // 可以添加錯誤提示
+            }
+        } catch (error) {
+            console.error('Error starting CAN logging:', error);
+        }
+    }
+
+    async stopCanLogging() {
+        try {
+            const response = await fetch('/api/canlogging/stop', {
+                method: 'POST'
+            });
+            const result = await response.json();
+            
+            if (result.status === 'success') {
+                console.log('CAN logging stopped:', result.message);
+                // 可以添加成功提示
+            } else {
+                console.error('Failed to stop CAN logging:', result.message);
+                // 可以添加錯誤提示
+            }
+        } catch (error) {
+            console.error('Error stopping CAN logging:', error);
+        }
+    }
+
+    async loadCanLoggingStatus() {
+        try {
+            const response = await fetch('/api/data');
+            const data = await response.json();
+            
+            if (!data.error && data.canlogging) {
+                this.updateCanLoggingStatus(data.canlogging);
+            }
+        } catch (error) {
+            console.error('Failed to load CAN logging status:', error);
         }
     }
 }
