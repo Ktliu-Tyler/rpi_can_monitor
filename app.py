@@ -26,9 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-USE_CSV = False
+USE_CSV = True
 # CSV_FILE = '../LOGS/can_log_20250727_112357.csv'
-CSV_FILE = "../LOGS/can_log_20250731_00445.csv"
+CSV_FILE = "../LOGS/can_log_20250731_004450.csv"
 CSV_SPEED = 1.0
 PORT = 8888
 DIRBASE = "../LOGS/"

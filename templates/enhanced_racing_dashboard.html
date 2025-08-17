@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CAN Data Monitor - NTURT Dashboard</title>
+    <title>CAN Data Monitor - NTUR Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -199,7 +199,7 @@
         <div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl shadow-lg p-6 mb-6 text-white">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-4xl font-bold">NTURT Dashboard</h1>
+                    <h1 class="text-4xl font-bold">NTUR Dashboard</h1>
                     <p class="text-blue-100 text-lg">Real-time Vehicle Telemetry System</p>
                 </div>
                 <div class="text-right">
@@ -623,7 +623,7 @@
         <!-- Footer -->
         <div class="bg-white rounded-xl shadow-lg p-6 text-center text-gray-500">
             <p class="mb-2">Last Update: <span id="last-update" class="font-mono">N/A</span></p>
-            <p class="text-sm">NTURT Racing Team - Enhanced CAN Data Monitor v2.0</p>
+            <p class="text-sm">NTUR Racing Team - Enhanced CAN Data Monitor v2.0</p>
         </div>
     </div>
 
@@ -1040,7 +1040,7 @@
             
             // Update VCU data
             if (data.vcu) {
-                document.getElementById('vcu-steer').textContent = formatValue(data.vcu.steer, '°', 1);
+                document.getElementById('vcu-steer').textContent = formatValue(data.vcu.steer/10000, '°', 1);
                 document.getElementById('vcu-accel').textContent = formatValue(data.vcu.accel, '%', 0);
                 document.getElementById('vcu-apps1').textContent = formatValue(data.vcu.apps1, '', 0);
                 document.getElementById('vcu-apps2').textContent = formatValue(data.vcu.apps2, '', 0);
