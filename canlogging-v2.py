@@ -35,7 +35,7 @@ def new_csv_writer(base_dir, base_name):
     return f, writer
 
 def main():
-    base_dir = "/home/pi/Desktop/LOGS"
+    base_dir = "/home/pi/Desktop/RPI_Desktop/LOGS"
     os.makedirs(base_dir, exist_ok=True)
 
     bus = connect_can()
