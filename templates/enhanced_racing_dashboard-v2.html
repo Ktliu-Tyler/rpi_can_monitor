@@ -703,7 +703,7 @@
                 segmentDiv.innerHTML = `
                     <div class="text-xs text-gray-500 mb-1">
                         Segment ${i} (Cells ${i*32}-${Math.min(i*32+31, 223)}) - Temperature Pack ${i+1}
-                        <span id="temp-segment-max-${i}" class="ml-2 text-orange-600 font-bold"></span>
+                        <span id="temp-segment-avg-${i}" class="ml-2 text-orange-600 font-bold"></span>
                     </div>
                     <div id="temp-segment-${i}" class="value-display text-xs bg-white p-2 rounded max-h-24 overflow-y-auto">N/A</div>
                 `;
@@ -862,7 +862,7 @@
                     if (element) {
                         element.textContent = voltageSegments[i];
                     }
-                    // segment sum
+                    // 計算 segment sum 並顯示
                     const sumElement = document.getElementById(`segment-sum-${i}`);
                     if (sumElement) {
                         const start = i * 15;
@@ -889,19 +889,21 @@
                     if (element) {
                         element.textContent = tempSegments[i];
                     }
-                    // 溫度最高值顯示
-                    const maxElement = document.getElementById(`temp-segment-max-${i}`);
-                    if (maxElement) {
+                    // 計算 segment 平均溫度（排除-13）
+                    const avgElement = document.getElementById(`temp-segment-avg-${i}`);
+                    if (avgElement) {
                         const start = i * 32;
                         const end = Math.min(start + 32, data.accumulator.cell_temperatures.length);
-                        let max = null;
+                        let sum = 0;
+                        let count = 0;
                         for (let j = start; j < end; j++) {
                             const t = data.accumulator.cell_temperatures[j];
                             if (t !== null && t !== undefined && t !== -13) {
-                                if (max === null || t > max) max = t;
+                                sum += t;
+                                count++;
                             }
                         }
-                        maxElement.textContent = max !== null ? `Max=${max.toFixed(2)}°C` : '';
+                        avgElement.textContent = count > 0 ? `Avg=${(sum/count).toFixed(2)}°C` : '';
                     }
                 }
             }

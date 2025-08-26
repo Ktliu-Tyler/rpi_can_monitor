@@ -14,7 +14,7 @@ import threading
 from typing import List
 import csv
 import os
-
+# _0801_2248_retire
 
 
 app = FastAPI()
@@ -26,9 +26,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-USE_CSV = True
+USE_CSV = False
 # CSV_FILE = '../LOGS/can_log_20250727_112357.csv'
-CSV_FILE = "../LOGS/can_log_20250731_004450.csv"
+CSV_FILE = "../LOGS/can_log_20250731_00445.csv"
 CSV_SPEED = 1.0
 PORT = 8888
 DIRBASE = "../LOGS/"
@@ -40,6 +40,7 @@ connections: List[WebSocket] = []
 
 class CanReceiverWebApp:
     def __init__(self, use_csv=USE_CSV, csv_file=CSV_FILE, csv_speed=CSV_SPEED):
+        self.csv_data = []
         self.use_csv = use_csv
         self.csv_file = csv_file
         self.csv_speed = csv_speed
@@ -62,7 +63,13 @@ class CanReceiverWebApp:
             self.load_csv_file()
         else:
             try:
-                self.bus = can.interface.Bus(channel='can0', bustype='socketcan')
+                from packaging import version
+                can_kwargs = dict(channel='can0')
+                if version.parse(can.__version__) >= version.parse('4.2.0'):
+                    can_kwargs['interface'] = 'socketcan'
+                else:
+                    can_kwargs['bustype'] = 'socketcan'
+                self.bus = can.interface.Bus(**can_kwargs)
             except Exception as e:
                 print(f"Warning: Could not initialize CAN bus: {e}")
                 self.bus = None
@@ -115,11 +122,7 @@ class CanReceiverWebApp:
             'vcu': {
                 'steer': None, 'accel': None, 'apps1': None,    
                 'apps2': None, 'brake': None, 'bse1': None, 'bse2': None,
-                'last_update': None},
-            'canlogging': {
-                'is_recording': False, 'start_time': None, 'start_timestamp': None,
-                'last_update': None
-            }
+                'last_update': None}
         }
         
         self.message_count = 0
@@ -350,7 +353,7 @@ class CanReceiverWebApp:
     def switch_mode(self, use_csv):
         """切換 CSV 模式和 CAN 模式"""
         if self.use_csv == use_csv:
-            return True  
+            return True  # 已經是目標模式
         
         old_mode = "CSV" if self.use_csv else "CAN"
         new_mode = "CSV" if use_csv else "CAN"
@@ -371,15 +374,18 @@ class CanReceiverWebApp:
             if use_csv:
                 # 切換到 CSV 模式
                 self.csv_data = []
-                # 刷新可用的 CSV 檔案列表
-                self.available_csv_files = self.scan_csv_files()
                 self.load_csv_file()
                 print(f"Switched from {old_mode} to CSV mode")
-                print(f"Refreshed CSV files list: {len(self.available_csv_files)} files found")
             else:
                 # 切換到 CAN 模式
                 try:
-                    self.bus = can.interface.Bus(channel='can0', bustype='socketcan')
+                    from packaging import version
+                    can_kwargs = dict(channel='can0')
+                    if version.parse(can.__version__) >= version.parse('4.2.0'):
+                        can_kwargs['interface'] = 'socketcan'
+                    else:
+                        can_kwargs['bustype'] = 'socketcan'
+                    self.bus = can.interface.Bus(**can_kwargs)
                     print(f"Switched from {old_mode} to CAN mode")
                 except Exception as e:
                     print(f"Warning: Could not initialize CAN bus: {e}")
@@ -411,24 +417,6 @@ class CanReceiverWebApp:
         except:
             return False
 
-    def send_can_control_command(self, command_byte):
-        """發送 CAN 控制命令到 0x420"""
-        if not self.is_can_available():
-            return False, "CAN interface not available"
-        
-        try:
-            temp_bus = can.interface.Bus(channel='can0', bustype='socketcan')
-            data = [command_byte] + [0x00] * 7  # 第一個 byte 是命令，其餘填 0
-            message = can.Message(arbitration_id=0x420, data=data, is_extended_id=False)
-            temp_bus.send(message)
-            temp_bus.shutdown()
-            
-            command_name = "START" if command_byte == 0x01 else "STOP" if command_byte == 0x02 else "UNKNOWN"
-            print(f"Sent CAN control command: {command_name} (0x420: {command_byte:02X})")
-            return True, f"Successfully sent {command_name} command"
-        except Exception as e:
-            return False, f"Failed to send CAN command: {str(e)}"
-
     async def broadcast_data(self):
         """廣播數據到所有連接的客戶端"""
         if not connections:
@@ -440,7 +428,6 @@ class CanReceiverWebApp:
             'accumulator': self.data_store['accumulator'],
             'inverters': self.data_store['inverters'],
             'vcu': self.data_store['vcu'],
-            'canlogging': self.data_store['canlogging'],
             'message_count': self.message_count,
             'update_time': datetime.now().isoformat(),
             'playback_control': self.get_playback_status() 
@@ -581,10 +568,6 @@ class CanReceiverWebApp:
             elif 0x210 <= can_id <= 0x214:
                 inv_num = can_id - 0x210
                 self.decode_inverter_control(data, inv_num)
-            
-            # CAN Logging 狀態解碼
-            elif can_id == 0x421:
-                self.decode_canlogging_status(data)
 
         except Exception as e:
             print(f"Failed to decode CAN message ID 0x{can_id:03X}: {e}")
@@ -892,34 +875,6 @@ class CanReceiverWebApp:
                 self.data_store['inverters'][inv_num]['target_torque'] = target_torque
                 self.data_store['inverters'][inv_num]['last_update'] = current_time
 
-    def decode_canlogging_status(self, data):
-        """解碼 CAN Logging 狀態 (0x421)"""
-        if len(data) >= 1:
-            status_byte = data[0]
-            current_time = time.time()
-            
-            if status_byte == 0x01:
-                # 正在記錄，解析開始時間
-                if len(data) >= 5:
-                    # 從 bytes 1-4 重建 timestamp (little-endian)
-                    timestamp = (data[4] << 24) | (data[3] << 16) | (data[2] << 8) | data[1]
-                    start_time = datetime.fromtimestamp(timestamp)
-                    
-                    self.data_store['canlogging']['is_recording'] = True
-                    self.data_store['canlogging']['start_time'] = start_time
-                    self.data_store['canlogging']['start_timestamp'] = timestamp
-                else:
-                    # 沒有時間資訊，只設定狀態
-                    self.data_store['canlogging']['is_recording'] = True
-                    
-            elif status_byte == 0x00:
-                # 未記錄
-                self.data_store['canlogging']['is_recording'] = False
-                self.data_store['canlogging']['start_time'] = None
-                self.data_store['canlogging']['start_timestamp'] = None
-            
-            self.data_store['canlogging']['last_update'] = current_time
-
 # global CAN receiver instance
 can_receiver = None
 
@@ -951,7 +906,6 @@ async def get_data():
             'accumulator': can_receiver.data_store['accumulator'],
             'inverters': can_receiver.data_store['inverters'],
             'vcu': can_receiver.data_store['vcu'],
-            'canlogging': can_receiver.data_store['canlogging'],
             'message_count': can_receiver.message_count,
             'update_time': datetime.now().isoformat()
         }
@@ -963,6 +917,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     connections.append(websocket)
     print('Client connected')
+    # 新增：連線時主動推送一次資料
+    if can_receiver:
+        await can_receiver.broadcast_data()
     try:
         while True:
             await websocket.receive_text()  # 等待客戶端發送消息以保持連接
@@ -1061,45 +1018,12 @@ async def get_available_files():
         return {'files': can_receiver.available_csv_files}
     return {'error': 'CAN receiver not initialized'}
 
-@app.post('/api/control/refresh-files')
-async def refresh_csv_files():
-    if can_receiver:
-        can_receiver.available_csv_files = can_receiver.scan_csv_files()
-        return {
-            'status': 'files refreshed',
-            'count': len(can_receiver.available_csv_files),
-            'files': can_receiver.available_csv_files
-        }
-    return {'error': 'CAN receiver not initialized'}
-
-@app.post('/api/canlogging/start')
-async def start_canlogging():
-    """發送開始記錄命令"""
-    if can_receiver:
-        success, message = can_receiver.send_can_control_command(0x01)
-        if success:
-            return {'status': 'success', 'message': message}
-        else:
-            return {'status': 'error', 'message': message}
-    return {'error': 'CAN receiver not initialized'}
-
-@app.post('/api/canlogging/stop')
-async def stop_canlogging():
-    """發送停止記錄命令"""
-    if can_receiver:
-        success, message = can_receiver.send_can_control_command(0x02)
-        if success:
-            return {'status': 'success', 'message': message}
-        else:
-            return {'status': 'error', 'message': message}
-    return {'error': 'CAN receiver not initialized'}
-
-
 if __name__ == '__main__':
     print("Starting NTURT CAN Monitor Web Application...")
-    print("Access the web interface at: http://100.127.237.75:8888/")
-    print("Access the web interface at: http://localhost:8888/")
+    print("Access the web interface at: http://100.127.237.75:8888")
+    print("Access the web interface at: http://localhost:8000/dashboard")
     print("For remote access via Tailscale, use your Tailscale IP address.")
+    print("CSV BASE DIRECTORY:", DIRBASE)
     print("Press Ctrl+C to stop the application.")
     
     uvicorn.run(app, host='0.0.0.0', port=PORT)
