@@ -200,25 +200,38 @@ class CanReceiver:
               f"APPS2: {self.format_value(vcu['apps2'], '{:>6}'):>8}")
         print(f"               BSE1: {self.format_value(vcu['bse1'], '{:.2f}'):>8} "
               f"BSE2: {self.format_value(vcu['bse2'], '{:.2f}'):>8}")
+        print("-" * 90)
+        # IMU Section
+        # imu = self.decoder.data_store['imu']
+        # print(f"[IMU]          LSM6 Accel X: {self.format_value(imu['lsm6_accel']['x'], '{:.3f} m/s²'):>12} "
+        #       f"Y: {self.format_value(imu['lsm6_accel']['y'], '{:.3f} m/s²'):>12} "
+        #       f"Z: {self.format_value(imu['lsm6_accel']['z'], '{:.3f} m/s²'):>12}")
+        # print(f"               LSM303 Accel X: {self.format_value(imu['lsm303_accel']['x'], '{:.3f} m/s²'):>11} "
+        #       f"Y: {self.format_value(imu['lsm303_accel']['y'], '{:.3f} m/s²'):>12} "
+        #       f"Z: {self.format_value(imu['lsm303_accel']['z'], '{:.3f} m/s²'):>12}")
+        # print(f"               Gyro X: {self.format_value(imu['gyro']['x'], '{:.3f} rad/s'):>15} "
+        #       f"Y: {self.format_value(imu['gyro']['y'], '{:.3f} rad/s'):>12} "
+        #       f"Z: {self.format_value(imu['gyro']['z'], '{:.3f} rad/s'):>12}")
+        # print(f"               Euler Roll: {self.format_value(imu['euler_angles']['roll'], '{:.1f}°'):>12} "
+        #       f"Pitch: {self.format_value(imu['euler_angles']['pitch'], '{:.1f}°'):>10} "
+        #       f"Yaw: {self.format_value(imu['euler_angles']['yaw'], '{:.1f}°'):>10}")
+        # print(f"               Magnetometer X: {self.format_value(imu['magnetometer']['x'], '{:.1f} μT'):>10} "
+        #       f"Y: {self.format_value(imu['magnetometer']['y'], '{:.1f} μT'):>10} "
+        #       f"Z: {self.format_value(imu['magnetometer']['z'], '{:.1f} μT'):>10}")
 
-        # IMU Section (新增)
-        imu = self.decoder.data_store['imu']
-        print(f"[IMU]          LSM6 Accel X: {self.format_value(imu['lsm6_accel']['x'], '{:.3f} m/s²'):>12} "
-              f"Y: {self.format_value(imu['lsm6_accel']['y'], '{:.3f} m/s²'):>12} "
-              f"Z: {self.format_value(imu['lsm6_accel']['z'], '{:.3f} m/s²'):>12}")
-        print(f"               LSM303 Accel X: {self.format_value(imu['lsm303_accel']['x'], '{:.3f} m/s²'):>11} "
-              f"Y: {self.format_value(imu['lsm303_accel']['y'], '{:.3f} m/s²'):>12} "
-              f"Z: {self.format_value(imu['lsm303_accel']['z'], '{:.3f} m/s²'):>12}")
-        print(f"               Gyro X: {self.format_value(imu['gyro']['x'], '{:.3f} rad/s'):>15} "
-              f"Y: {self.format_value(imu['gyro']['y'], '{:.3f} rad/s'):>12} "
-              f"Z: {self.format_value(imu['gyro']['z'], '{:.3f} rad/s'):>12}")
-        print(f"               Euler Roll: {self.format_value(imu['euler_angles']['roll'], '{:.1f}°'):>12} "
-              f"Pitch: {self.format_value(imu['euler_angles']['pitch'], '{:.1f}°'):>10} "
-              f"Yaw: {self.format_value(imu['euler_angles']['yaw'], '{:.1f}°'):>10}")
-        print(f"               Magnetometer X: {self.format_value(imu['magnetometer']['x'], '{:.1f} μT'):>10} "
-              f"Y: {self.format_value(imu['magnetometer']['y'], '{:.1f} μT'):>10} "
-              f"Z: {self.format_value(imu['magnetometer']['z'], '{:.1f} μT'):>10}")
-
+        # IMU2 Section
+        imu2 = self.decoder.data_store['imu2']
+        print(f"[IMU]          Acceleration X: {self.format_value(imu2['acceleration']['x'], '{:.4f} g'):>12} "
+              f"Y: {self.format_value(imu2['acceleration']['y'], '{:.4f} g'):>12} "
+              f"Z: {self.format_value(imu2['acceleration']['z'], '{:.4f} g'):>12}")
+        print(f"               Gyration X: {self.format_value(imu2['gyration']['x'], '{:.2f} deg/s'):>15} "
+              f"Y: {self.format_value(imu2['gyration']['y'], '{:.2f} deg/s'):>12} "
+              f"Z: {self.format_value(imu2['gyration']['z'], '{:.2f} deg/s'):>12}")
+        print(f"               Quaternion W: {self.format_value(imu2['quaternion']['w'], '{:.4f}'):>12} "
+              f"X: {self.format_value(imu2['quaternion']['x'], '{:.4f}'):>10} "
+              f"Y: {self.format_value(imu2['quaternion']['y'], '{:.4f}'):>10} "
+              f"Z: {self.format_value(imu2['quaternion']['z'], '{:.4f}'):>10}")
+        print("-" * 90)
         # GPS Section
         gps = self.decoder.data_store['gps']
         cov = self.decoder.data_store['covariance']
@@ -227,7 +240,7 @@ class CanReceiver:
               f"Alt: {self.format_value(gps['alt'], '{:.1f}m'):>8}")
         print(f"               Status: {self.format_value(gps['status'], '0x{:02X}'):>8} "
               f"Covariance Type: {cov['type_name']:>15}")
-        
+        print("-" * 90)
         # Velocity Section  
         vel = self.decoder.data_store['velocity']
         print(f"[Velocity]     Linear X: {self.format_value(vel['linear_x'], '{:.3f} m/s'):>10} "
@@ -238,7 +251,7 @@ class CanReceiver:
               f"Z: {self.format_value(vel['angular_z'], '{:.3f} rad/s'):>11}")
         print(f"               Total Speed: {self.format_value(vel['magnitude'], '{:.3f} m/s'):>11} "
               f"({self.format_value(vel['speed_kmh'], '{:.2f} km/h'):>10})")
-        
+        print("-" * 90)
         # Accumulator Section
         acc = self.decoder.data_store['accumulator']
         print(f"[Accumulator]  SOC: {self.format_value(acc['soc'], '{}%'):>5} "
@@ -248,7 +261,7 @@ class CanReceiver:
         print(f"               Status: {self.format_value(acc['status'], '0x{:02X}'):>6} "
               f"Capacity: {self.format_value(acc['capacity'], '{:.2f}Ah'):>9} "
               f"Heartbeat: {self.format_value(acc['heartbeat'], lambda x: 'OK' if x else 'FAIL'):>4}")
-        
+        print("-" * 90)
         # Inverters Section
         for inv_id, inv in self.decoder.data_store['inverters'].items():
             # Calculate speed in km/h for inverters

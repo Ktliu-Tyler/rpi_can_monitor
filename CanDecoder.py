@@ -31,16 +31,16 @@ class CanDecoder:
                 'last_update': None
             },
             'inverters': {
-                1: {'name': 'FL', 'status': None, 'torque': None, 'speed': None,
-                    'control_word': None, 'target_torque': None,
-                    'dc_voltage': None, 'dc_current': None,
-                    'mos_temp': None, 'mcu_temp': None, 'motor_temp': None,
-                    'heartbeat': None, 'last_update': None},
-                2: {'name': 'FR', 'status': None, 'torque': None, 'speed': None,
-                    'control_word': None, 'target_torque': None,
-                    'dc_voltage': None, 'dc_current': None,
-                    'mos_temp': None, 'mcu_temp': None, 'motor_temp': None,
-                    'heartbeat': None, 'last_update': None},
+                # 1: {'name': 'FL', 'status': None, 'torque': None, 'speed': None,
+                #     'control_word': None, 'target_torque': None,
+                #     'dc_voltage': None, 'dc_current': None,
+                #     'mos_temp': None, 'mcu_temp': None, 'motor_temp': None,
+                #     'heartbeat': None, 'last_update': None},
+                # 2: {'name': 'FR', 'status': None, 'torque': None, 'speed': None,
+                #     'control_word': None, 'target_torque': None,
+                #     'dc_voltage': None, 'dc_current': None,
+                #     'mos_temp': None, 'mcu_temp': None, 'motor_temp': None,
+                #     'heartbeat': None, 'last_update': None},
                 3: {'name': 'RL', 'status': None, 'torque': None, 'speed': None,
                     'control_word': None, 'target_torque': None,
                     'dc_voltage': None, 'dc_current': None,
@@ -66,6 +66,12 @@ class CanDecoder:
                 'gyro': {'x': None, 'y': None, 'z': None},
                 'euler_angles': {'roll': None, 'pitch': None, 'yaw': None},
                 'magnetometer': {'x': None, 'y': None, 'z': None},
+                'last_update': None
+            },
+            'imu2': {
+                'acceleration': {'x': None, 'y': None, 'z': None},
+                'gyration': {'x': None, 'y': None, 'z': None},
+                'quaternion': {'w': None, 'x': None, 'y': None, 'z': None},
                 'last_update': None
             }
         }
@@ -124,6 +130,14 @@ class CanDecoder:
                 self.decode_euler_angles(data)
             elif can_id == 0x430:
                 self.decode_magnetometer(data)
+            
+            # IMU2 數據解碼
+            elif can_id == 0x188:
+                self.decode_imu2_acceleration(data)
+            elif can_id == 0x288:
+                self.decode_imu2_gyration(data)
+            elif can_id == 0x488:
+                self.decode_imu2_quaternion(data)
 
             # 速度資料解碼
             elif can_id == 0x402:
@@ -266,9 +280,71 @@ class CanDecoder:
             self.data_store['imu']['magnetometer']['z'] = mz
             self.data_store['imu']['last_update'] = current_time
 
+    # IMU2 解碼函數
+    def decode_imu2_acceleration(self, data):
+        """解碼 IMU2 加速度計數據 (0x188)"""
+        if len(data) >= 6:
+            # 解包 3 個 16-bit 有號整數 (little-endian)
+            ax_raw, ay_raw, az_raw = struct.unpack('<hhh', data[0:6])
+            
+            # 根據圖片顯示，單位是 g/LSB (signed)
+            # 直接使用原始值，因為已經是以 g 為單位
+            ax = ax_raw * 0.001  # 將 LSB 轉換為 g
+            ay = ay_raw * 0.001
+            az = az_raw * 0.001
+            
+            current_time = time.time()
+            self.data_store['imu2']['acceleration']['x'] = ax
+            self.data_store['imu2']['acceleration']['y'] = ay
+            self.data_store['imu2']['acceleration']['z'] = az
+            self.data_store['imu2']['last_update'] = current_time
+
+    def decode_imu2_gyration(self, data):
+        """解碼 IMU2 陀螺儀數據 (0x288)"""
+        if len(data) >= 6:
+            # 解包 3 個 16-bit 有號整數 (little-endian)
+            gx_raw, gy_raw, gz_raw = struct.unpack('<hhh', data[0:6])
+            
+            # 根據圖片顯示，單位是 deg/s/LSB (signed)
+            # 直接使用原始值，因為已經是以 deg/s 為單位
+            gx = gx_raw * 0.1  # 將 LSB 轉換為 deg/s
+            gy = gy_raw * 0.1
+            gz = gz_raw * 0.1
+            
+            current_time = time.time()
+            self.data_store['imu2']['gyration']['x'] = gx
+            self.data_store['imu2']['gyration']['y'] = gy
+            self.data_store['imu2']['gyration']['z'] = gz
+            self.data_store['imu2']['last_update'] = current_time
+
+    def decode_imu2_quaternion(self, data):
+        """解碼 IMU2 四元數數據 (0x488)"""
+        if len(data) >= 8:
+            # 解包 4 個 16-bit 有號整數 (little-endian)
+            qw_raw, qx_raw, qy_raw, qz_raw = struct.unpack('<hhhh', data[0:8])
+            
+            # 四元數通常歸一化，範圍在 -1 到 1 之間
+            # 假設原始值需要除以某個縮放因子來歸一化
+            scale_factor = 16384.0  # 常見的四元數縮放因子 (2^14)
+            qw = qw_raw / scale_factor
+            qx = qx_raw / scale_factor
+            qy = qy_raw / scale_factor
+            qz = qz_raw / scale_factor
+            
+            current_time = time.time()
+            self.data_store['imu2']['quaternion']['w'] = qw
+            self.data_store['imu2']['quaternion']['x'] = qx
+            self.data_store['imu2']['quaternion']['y'] = qy
+            self.data_store['imu2']['quaternion']['z'] = qz
+            self.data_store['imu2']['last_update'] = current_time
+
     def get_imu_data(self):
         """獲取所有 IMU 數據"""
         return self.data_store['imu'].copy()
+
+    def get_imu2_data(self):
+        """獲取 IMU2 數據"""
+        return self.data_store['imu2'].copy()
 
     def print_imu_data(self):
         """打印 IMU 數據（用於調試）"""
@@ -301,6 +377,26 @@ class CanDecoder:
         else:
             print("No IMU data received yet")
 
+    def print_imu2_data(self):
+        """打印 IMU2 數據（用於調試）"""
+        imu2 = self.data_store['imu2']
+        if imu2['last_update']:
+            print(f"\n=== IMU2 Data (Last Update: {datetime.fromtimestamp(imu2['last_update']).strftime('%H:%M:%S.%f')[:-3]}) ===")
+            
+            # 加速度
+            if all(v is not None for v in imu2['acceleration'].values()):
+                print(f"Acceleration: X={imu2['acceleration']['x']:8.4f}, Y={imu2['acceleration']['y']:8.4f}, Z={imu2['acceleration']['z']:8.4f} g/LSB")
+            
+            # 陀螺儀
+            if all(v is not None for v in imu2['gyration'].values()):
+                print(f"Gyration:     X={imu2['gyration']['x']:8.4f}, Y={imu2['gyration']['y']:8.4f}, Z={imu2['gyration']['z']:8.4f} deg/s/LSB")
+            
+            # 四元數
+            if all(v is not None for v in imu2['quaternion'].values()):
+                print(f"Quaternion:   W={imu2['quaternion']['w']:8.4f}, X={imu2['quaternion']['x']:8.4f}, Y={imu2['quaternion']['y']:8.4f}, Z={imu2['quaternion']['z']:8.4f}")
+        else:
+            print("No IMU2 data received yet")
+
 
 
 # define all decode functions
@@ -329,7 +425,7 @@ class CanDecoder:
             stear_data = stear_raw *100
             # 更新 VCU 數據
             current_time = time.time()
-            self.data_store['vcu']['steer'] = stear_data
+            self.data_store['vcu']['steer'] = stear_data / 10000
             self.data_store['vcu']['accel'] = accel_raw
             self.data_store['vcu']['apps1'] = apps1_raw
             self.data_store['vcu']['apps2'] = apps2_raw

@@ -61,9 +61,8 @@ def main():
     vcu_last = check_vcu_running()
     while True:
         msg = bus.recv(timeout=1)
-        # 0x281 訊息更新 vcu_instruction 狀態
         if msg is not None and hasattr(msg, 'arbitration_id') and msg.arbitration_id == 0x281 and len(msg.data) > 0:
-            vcu_instruction = bool((msg.data[0] >> 6) & 0x01)
+            vcu_instruction = msg.data[0] & 0x20
 
         vcu_running = check_vcu_running()
         # VCU 狀態 edge: False -> True，強制新開檔記錄
