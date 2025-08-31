@@ -125,9 +125,6 @@ class NTURTDashboard {
             // Update charts with new data
             this.updateCharts(data);
             
-            // Update CAN logging status
-            this.updateCanLoggingStatus(data.canlogging);
-            
             // Update playback controls if available
             this.updatePlaybackControls(data);
 
@@ -1428,25 +1425,36 @@ class NTURTDashboard {
         const startTimeElement = document.getElementById('canlogging-start-time');
         
         if (statusElement && statusTextElement) {
-            if (canlogging.is_recording) {
-                statusElement.className = 'status-indicator recording';
-                statusTextElement.textContent = 'RECORDING';
-                statusTextElement.className = 'text-lg font-bold text-red-400';
-            } else {
-                statusElement.className = 'status-indicator idle';
-                statusTextElement.textContent = 'IDLE';
-                statusTextElement.className = 'text-lg font-bold text-slate-300';
-            }
-        }
-        
-        if (startTimeElement) {
-            if (canlogging.start_time) {
-                const startTime = new Date(canlogging.start_time + 'Z'); // 確保時區正確
-                startTimeElement.textContent = `Recording started: ${startTime.toLocaleString()}`;
-                startTimeElement.className = 'text-sm text-green-400';
-            } else {
-                startTimeElement.textContent = 'No active recording';
-                startTimeElement.className = 'text-sm text-slate-400';
+            statusElement.className = 'status-indicator'; // Reset classes
+            switch (canlogging.status) {
+                case 0: // IDLE
+                    statusElement.classList.add('idle');
+                    statusTextElement.textContent = 'IDLE';
+                    statusTextElement.className = 'text-lg font-bold text-slate-300';
+                    if (startTimeElement) startTimeElement.textContent = 'No active recording';
+                    break;
+                case 1: // RECORDING
+                    statusElement.classList.add('recording');
+                    statusTextElement.textContent = 'RECORDING';
+                    statusTextElement.className = 'text-lg font-bold text-red-400';
+                    if (startTimeElement && startTimeElement.textContent.includes('No active')) {
+                        startTimeElement.textContent = `Started: ${new Date().toLocaleTimeString()}`;
+                    }
+                    break;
+                case 2: // STOPPED
+                    statusElement.classList.add('stopped');
+                    statusTextElement.textContent = 'STOPPED';
+                    statusTextElement.className = 'text-lg font-bold text-yellow-400';
+                    break;
+                case 3: // ERROR
+                    statusElement.classList.add('error');
+                    statusTextElement.textContent = 'ERROR';
+                    statusTextElement.className = 'text-lg font-bold text-orange-500';
+                    break;
+                default:
+                    statusElement.classList.add('idle');
+                    statusTextElement.textContent = 'UNKNOWN';
+                    statusTextElement.className = 'text-lg font-bold text-slate-300';
             }
         }
     }

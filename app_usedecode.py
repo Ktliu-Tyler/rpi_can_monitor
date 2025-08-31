@@ -70,17 +70,36 @@ class CanReceiverWebApp:
         print("CAN Receiver Web App Started")
 
     async def start_can_receiver(self):
-        """啟動CAN接收循環 (async)"""
+        """啟動CAN接收循環和廣播循環"""
+        # 建立兩個並行的任務
+        receiver_task = asyncio.create_task(self.receiver_loop())
+        broadcaster_task = asyncio.create_task(self.broadcaster_loop())
+        
+        # 等待兩個任務完成（實際上會一直運行）
+        await asyncio.gather(receiver_task, broadcaster_task)
+
+    async def receiver_loop(self):
+        """CAN 訊息接收主循環"""
         while self.running:
             try:
                 if self.use_csv:
                     await self.csv_receive_callback()
                 else:
                     await self.real_can_receive_callback()
-                await asyncio.sleep(0.001)
+                # 降低 CPU 使用率，避免在沒有訊息時空轉
+                await asyncio.sleep(0.0001) 
             except Exception as e:
-                print(f"Error in CAN receiver loop: {e}")
+                print(f"Error in receiver loop: {e}")
                 await asyncio.sleep(0.1)
+
+    async def broadcaster_loop(self):
+        """定期廣播數據的循環"""
+        while self.running:
+            # 只在有客戶端連接時才廣播
+            if connections:
+                await self.broadcast_data()
+            # 固定廣播頻率，例如每 50ms 一次 (20 FPS)
+            await asyncio.sleep(0.05)
 
     def load_csv_file(self):
         """載入 CSV 檔案"""
@@ -374,6 +393,7 @@ class CanReceiverWebApp:
             'inverters': self.decoder.data_store['inverters'],
             'vcu': self.decoder.data_store['vcu'],
             'canlogging': self.decoder.data_store['canlogging'],
+            'imu2': self.decoder.data_store['imu2'],
             'message_count': self.message_count,
             'update_time': datetime.now().isoformat(),
             'playback_control': self.get_playback_status() 
@@ -406,8 +426,8 @@ class CanReceiverWebApp:
                 if message:
                     self.message_count += 1
                     self.process_can_message(message)
-                    await self.broadcast_data()
-            await asyncio.sleep(0.001)
+                    # await self.broadcast_data() # REMOVED to prevent flooding
+            # await asyncio.sleep(0.001) # REMOVED, handled by receiver_loop
         except Exception as e:
             await asyncio.sleep(0.1)
 
@@ -437,8 +457,8 @@ class CanReceiverWebApp:
             self.csv_index += 1
             updated = True
         if updated:
-            await self.broadcast_data()
-        await asyncio.sleep(0.001)
+            pass # await self.broadcast_data() # REMOVED to prevent flooding
+        # await asyncio.sleep(0.001) # REMOVED, handled by receiver_loop
 
     def create_mock_can_message(self, can_id, data):
         """創建模擬的 CAN 訊息對象"""
@@ -479,6 +499,7 @@ async def get_data():
             'inverters': can_receiver.decoder.data_store['inverters'],
             'vcu': can_receiver.decoder.data_store['vcu'],
             'canlogging': can_receiver.decoder.data_store['canlogging'],
+            'imu2': can_receiver.decoder.data_store['imu2'],
             'message_count': can_receiver.message_count,
             'update_time': datetime.now().isoformat()
         }
@@ -625,7 +646,7 @@ async def stop_canlogging():
 if __name__ == '__main__':
     print("Starting NTURT CAN Monitor Web Application...")
     print("Access the web interface at: http://100.107.50.128:5000/")
-    print("Access the web interface at: http://localhost:8000/")
+    print("Access the web interface at: http://localhost:8888/")
     print("For remote access via Tailscale, use your Tailscale IP address.")
     print("Press Ctrl+C to stop the application.")
     
