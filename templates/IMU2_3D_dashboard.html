@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMU2 3D Dashboard - NTUR Racing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        
+        .data-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .data-label {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-ok {
+            background-color: #10b981;
+            box-shadow: 0 0 10px #10b981;
+        }
+        
+        .status-warning {
+            background-color: #f59e0b;
+            box-shadow: 0 0 10px #f59e0b;
+        }
+        
+        .status-error {
+            background-color: #ef4444;
+            box-shadow: 0 0 10px #ef4444;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 10px;
+        }
+        
+        .vehicle-3d-container {
+            height: 400px;
+            border-radius: 15px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        
+        .acceleration-meter {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: conic-gradient(from 0deg, #10b981, #f59e0b, #ef4444, #8b5cf6, #10b981);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin: 0 auto;
+        }
+        
+        .acceleration-meter::before {
+            content: '';
+            position: absolute;
+            width: 160px;
+            height: 160px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            backdrop-filter: blur(10px);
+        }
+        
+        .acceleration-needle {
+            position: absolute;
+            width: 4px;
+            height: 80px;
+            background: #ffffff;
+            border-radius: 2px;
+            transform-origin: bottom center;
+            z-index: 10;
+            transition: transform 0.2s ease-in-out;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+        
+        .gyro-circle {
+            width: 120px;
+            height: 120px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin: 0 auto;
+        }
+        
+        .gyro-pointer {
+            position: absolute;
+            width: 2px;
+            height: 50px;
+            background: #60a5fa;
+            transform-origin: bottom center;
+            border-radius: 1px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 8px #60a5fa;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .quaternion-sphere {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+        
+        .title-glow {
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            background: linear-gradient(45deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <!-- Connection Status -->
+    <div class="connection-status">
+        <div class="glass-card p-3">
+            <div id="connection-indicator" class="flex items-center text-white">
+                <span class="status-indicator status-error"></span>
+                <span class="text-sm">Connecting...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto space-y-6">
+        <!-- Header -->
+        <div class="glass-card p-6 text-center">
+            <h1 class="text-4xl font-bold title-glow mb-2">IMU2 3D Dashboard</h1>
+            <p class="text-white/80">即時慣性測量單元數據視覺化</p>
+            <div class="mt-4 text-sm text-white/60">
+                <span>Last Update: <span id="last-update">N/A</span></span>
+                <span class="mx-4">|</span>
+                <span>Messages: <span id="message-count">0</span></span>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 3D Vehicle Visualization -->
+            <div class="lg:col-span-2 glass-card p-6">
+                <h2 class="text-2xl font-bold text-white mb-4 flex items-center">
+                    <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/>
+                    </svg>
+                    3D 車輛姿態
+                </h2>
+                <div id="vehicle-3d" class="vehicle-3d-container"></div>
+                
+                <!-- Quaternion Display -->
+                <div class="mt-4 grid grid-cols-4 gap-4 text-center">
+                    <div>
+                        <div class="data-label">W</div>
+                        <div class="data-value" id="quat-w">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label">X</div>
+                        <div class="data-value" id="quat-x">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label">Y</div>
+                        <div class="data-value" id="quat-y">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label">Z</div>
+                        <div class="data-value" id="quat-z">0.000</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status & Summary -->
+            <div class="space-y-6">
+                <!-- IMU2 Status -->
+                <div class="glass-card p-6">
+                    <h3 class="text-lg font-bold text-white mb-4">IMU2 狀態</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">連線狀態</span>
+                            <div id="imu2-status" class="flex items-center">
+                                <span class="status-indicator status-error"></span>
+                                <span class="text-white text-sm">離線</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">更新頻率</span>
+                            <span class="text-white font-mono" id="update-rate">0 Hz</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">總加速度</span>
+                            <span class="data-value text-lg" id="total-accel">0.00 g</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">總角速度</span>
+                            <span class="data-value text-lg" id="total-gyro">0.00 °/s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calculated Values -->
+                <div class="glass-card p-6">
+                    <h3 class="text-lg font-bold text-white mb-4">計算數值</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">橫向G力</span>
+                            <span class="data-value" id="lateral-g">0.00 g</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">縱向G力</span>
+                            <span class="data-value" id="longitudinal-g">0.00 g</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">垂直G力</span>
+                            <span class="data-value" id="vertical-g">0.00 g</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">滾轉角速度</span>
+                            <span class="data-value" id="roll-rate">0.00 °/s</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">俯仰角速度</span>
+                            <span class="data-value" id="pitch-rate">0.00 °/s</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-white/80">偏航角速度</span>
+                            <span class="data-value" id="yaw-rate">0.00 °/s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Data Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Acceleration -->
+            <div class="glass-card p-6">
+                <h3 class="text-xl font-bold text-white mb-4 text-center">加速度計</h3>
+                <div class="acceleration-meter mb-6">
+                    <div id="accel-needle" class="acceleration-needle"></div>
+                    <div class="relative z-10 text-center text-white">
+                        <div class="data-value text-xl" id="accel-magnitude">0.00</div>
+                        <div class="data-label">g</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                        <div class="data-label">X 軸</div>
+                        <div class="data-value" id="accel-x">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label">Y 軸</div>
+                        <div class="data-value" id="accel-y">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label">Z 軸</div>
+                        <div class="data-value" id="accel-z">0.000</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gyroscope -->
+            <div class="glass-card p-6">
+                <h3 class="text-xl font-bold text-white mb-4 text-center">陀螺儀</h3>
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="gyro-circle mb-2">
+                            <div id="gyro-x-pointer" class="gyro-pointer" style="background: #ef4444;"></div>
+                            <div id="gyro-y-pointer" class="gyro-pointer" style="background: #10b981;"></div>
+                            <div id="gyro-z-pointer" class="gyro-pointer" style="background: #3b82f6;"></div>
+                        </div>
+                        <div class="data-value text-lg" id="gyro-magnitude">0.00</div>
+                        <div class="data-label">°/s</div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 text-center mt-4">
+                    <div>
+                        <div class="data-label text-red-400">Roll</div>
+                        <div class="data-value" id="gyro-x">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label text-green-400">Pitch</div>
+                        <div class="data-value" id="gyro-y">0.000</div>
+                    </div>
+                    <div>
+                        <div class="data-label text-blue-400">Yaw</div>
+                        <div class="data-value" id="gyro-z">0.000</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quaternion Visualization -->
+            <div class="glass-card p-6">
+                <h3 class="text-xl font-bold text-white mb-4 text-center">四元數</h3>
+                <div class="quaternion-sphere mb-4">
+                    <div id="quat-vector" class="absolute w-2 h-20 bg-white rounded transform-origin-bottom transition-all duration-300"></div>
+                </div>
+                <div class="text-center mb-4">
+                    <div class="data-value text-lg" id="quat-magnitude">1.000</div>
+                    <div class="data-label">模長</div>
+                </div>
+                <!-- Euler Angles (calculated from quaternion) -->
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="data-label">Roll</span>
+                        <span class="data-value" id="euler-roll">0.0°</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="data-label">Pitch</span>
+                        <span class="data-value" id="euler-pitch">0.0°</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="data-label">Yaw</span>
+                        <span class="data-value" id="euler-yaw">0.0°</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Acceleration Chart -->
+            <div class="glass-card p-6">
+                <h3 class="text-xl font-bold text-white mb-4">加速度時間序列</h3>
+                <div class="chart-container">
+                    <canvas id="accelChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gyroscope Chart -->
+            <div class="glass-card p-6">
+                <h3 class="text-xl font-bold text-white mb-4">陀螺儀時間序列</h3>
+                <div class="chart-container">
+                    <canvas id="gyroChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        
+        // 3D Scene setup
+        let scene, camera, renderer, vehicle;
+        let accelData = {x: 0, y: 0, z: 0};
+        let gyroData = {x: 0, y: 0, z: 0};
+        let quatData = {w: 1, x: 0, y: 0, z: 0};
+        
+        // Chart setup
+        let accelChart, gyroChart;
+        const maxDataPoints = 100;
+        let lastUpdateTime = Date.now();
+        let updateCount = 0;
+        let lastRateCalc = Date.now();
+        
+        // Initialize 3D scene
+        function init3DScene() {
+            const container = document.getElementById('vehicle-3d');
+            
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({antialias: true});
+            renderer.setSize(container.offsetWidth, container.offsetHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Create vehicle (simplified car shape)
+            createVehicle();
+            
+            // Add coordinate axes
+            const axesHelper = new THREE.AxesHelper(2);
+            scene.add(axesHelper);
+            
+            // Add grid
+            const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x444444);
+            scene.add(gridHelper);
+            
+            // Animation loop
+            animate();
+        }
+        
+        function createVehicle() {
+            const vehicleGroup = new THREE.Group();
+            
+            // Main body
+            const bodyGeometry = new THREE.BoxGeometry(2, 0.5, 4);
+            const bodyMaterial = new THREE.MeshPhongMaterial({color: 0x0066cc});
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.25;
+            vehicleGroup.add(body);
+            
+            // Roof
+            const roofGeometry = new THREE.BoxGeometry(1.5, 0.3, 2);
+            const roofMaterial = new THREE.MeshPhongMaterial({color: 0x004499});
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 0.65;
+            roof.position.z = -0.5;
+            vehicleGroup.add(roof);
+            
+            // Wheels
+            const wheelGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.2);
+            const wheelMaterial = new THREE.MeshPhongMaterial({color: 0x333333});
+            
+            const wheelPositions = [
+                {x: -1.2, y: 0, z: 1.3},  // Front left
+                {x: 1.2, y: 0, z: 1.3},   // Front right
+                {x: -1.2, y: 0, z: -1.3}, // Rear left
+                {x: 1.2, y: 0, z: -1.3}   // Rear right
+            ];
+            
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.position.set(pos.x, pos.y, pos.z);
+                wheel.rotation.z = Math.PI / 2;
+                vehicleGroup.add(wheel);
+            });
+            
+            // Direction indicator (arrow)
+            const arrowGeometry = new THREE.ConeGeometry(0.2, 0.8);
+            const arrowMaterial = new THREE.MeshPhongMaterial({color: 0xff6600});
+            const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+            arrow.position.set(0, 1, 1.5);
+            arrow.rotation.x = -Math.PI / 2;
+            vehicleGroup.add(arrow);
+            
+            // Acceleration vector
+            const accelGeometry = new THREE.ConeGeometry(0.1, 1);
+            const accelMaterial = new THREE.MeshPhongMaterial({color: 0xff0000});
+            const accelVector = new THREE.Mesh(accelGeometry, accelMaterial);
+            accelVector.name = 'accelVector';
+            accelVector.position.set(0, 1.5, 0);
+            vehicleGroup.add(accelVector);
+            
+            vehicle = vehicleGroup;
+            scene.add(vehicle);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (vehicle) {
+                // Update vehicle orientation from quaternion
+                vehicle.quaternion.set(quatData.x, quatData.y, quatData.z, quatData.w);
+                
+                // Update acceleration vector
+                const accelVector = vehicle.getObjectByName('accelVector');
+                if (accelVector) {
+                    const accelMagnitude = Math.sqrt(accelData.x*accelData.x + accelData.y*accelData.y + accelData.z*accelData.z);
+                    accelVector.scale.y = Math.max(0.1, accelMagnitude);
+                    
+                    // Point acceleration vector in direction of acceleration
+                    const direction = new THREE.Vector3(accelData.x, accelData.y, accelData.z).normalize();
+                    accelVector.lookAt(accelVector.position.clone().add(direction));
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Initialize charts
+        function initCharts() {
+            const ctx1 = document.getElementById('accelChart').getContext('2d');
+            const ctx2 = document.getElementById('gyroChart').getContext('2d');
+            
+            const chartConfig = {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {label: 'X', borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', data: []},
+                        {label: 'Y', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', data: []},
+                        {label: 'Z', borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', data: []}
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {displayFormats: {second: 'HH:mm:ss'}},
+                            grid: {color: 'rgba(255, 255, 255, 0.1)'},
+                            ticks: {color: 'rgba(255, 255, 255, 0.8)'}
+                        },
+                        y: {
+                            grid: {color: 'rgba(255, 255, 255, 0.1)'},
+                            ticks: {color: 'rgba(255, 255, 255, 0.8)'}
+                        }
+                    },
+                    plugins: {
+                        legend: {labels: {color: 'rgba(255, 255, 255, 0.8)'}}
+                    }
+                }
+            };
+            
+            accelChart = new Chart(ctx1, {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        {label: 'X (g)', borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', data: []},
+                        {label: 'Y (g)', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', data: []},
+                        {label: 'Z (g)', borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', data: []}
+                    ]
+                }
+            });
+            
+            gyroChart = new Chart(ctx2, {
+                ...chartConfig,
+                data: {
+                    datasets: [
+                        {label: 'X (°/s)', borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', data: []},
+                        {label: 'Y (°/s)', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', data: []},
+                        {label: 'Z (°/s)', borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', data: []}
+                    ]
+                }
+            });
+        }
+        
+        // Utility functions
+        function formatValue(value, decimals = 3) {
+            return value !== null && value !== undefined ? value.toFixed(decimals) : 'N/A';
+        }
+        
+        function calculateTotalAcceleration(x, y, z) {
+            return Math.sqrt(x*x + y*y + z*z);
+        }
+        
+        function calculateTotalGyro(x, y, z) {
+            return Math.sqrt(x*x + y*y + z*z);
+        }
+        
+        function quaternionToEuler(w, x, y, z) {
+            // Convert quaternion to Euler angles (in degrees)
+            const roll = Math.atan2(2*(w*x + y*z), 1 - 2*(x*x + y*y)) * 180 / Math.PI;
+            const pitch = Math.asin(2*(w*y - z*x)) * 180 / Math.PI;
+            const yaw = Math.atan2(2*(w*z + x*y), 1 - 2*(y*y + z*z)) * 180 / Math.PI;
+            return {roll, pitch, yaw};
+        }
+        
+        function updateVisualIndicators() {
+            // Update acceleration needle
+            const totalAccel = calculateTotalAcceleration(accelData.x, accelData.y, accelData.z);
+            const accelAngle = Math.atan2(accelData.y, accelData.x) * 180 / Math.PI;
+            document.getElementById('accel-needle').style.transform = `rotate(${accelAngle}deg)`;
+            
+            // Update gyroscope pointers
+            const maxGyro = 360; // degrees per second
+            document.getElementById('gyro-x-pointer').style.transform = `rotate(${(gyroData.x / maxGyro) * 180}deg)`;
+            document.getElementById('gyro-y-pointer').style.transform = `rotate(${(gyroData.y / maxGyro) * 180 + 60}deg)`;
+            document.getElementById('gyro-z-pointer').style.transform = `rotate(${(gyroData.z / maxGyro) * 180 + 120}deg)`;
+            
+            // Update quaternion vector visualization
+            const quatMagnitude = Math.sqrt(quatData.w*quatData.w + quatData.x*quatData.x + quatData.y*quatData.y + quatData.z*quatData.z);
+            const quatAngle = Math.atan2(quatData.y, quatData.x) * 180 / Math.PI;
+            document.getElementById('quat-vector').style.transform = `rotate(${quatAngle}deg)`;
+        }
+        
+        function updateCharts(timestamp) {
+            const now = new Date(timestamp);
+            
+            // Add data points
+            [accelChart, gyroChart].forEach((chart, index) => {
+                const data = index === 0 ? accelData : gyroData;
+                
+                chart.data.datasets[0].data.push({x: now, y: data.x});
+                chart.data.datasets[1].data.push({x: now, y: data.y});
+                chart.data.datasets[2].data.push({x: now, y: data.z});
+                
+                // Keep only last maxDataPoints
+                chart.data.datasets.forEach(dataset => {
+                    if (dataset.data.length > maxDataPoints) {
+                        dataset.data.shift();
+                    }
+                });
+                
+                chart.update('none');
+            });
+        }
+        
+        function calculateUpdateRate() {
+            const now = Date.now();
+            updateCount++;
+            
+            if (now - lastRateCalc > 1000) { // Calculate every second
+                const rate = updateCount / ((now - lastRateCalc) / 1000);
+                document.getElementById('update-rate').textContent = rate.toFixed(1) + ' Hz';
+                updateCount = 0;
+                lastRateCalc = now;
+            }
+        }
+        
+        // WebSocket event handlers
+        ws.onopen = function() {
+            document.getElementById('connection-indicator').innerHTML = 
+                '<span class="status-indicator status-ok"></span><span class="text-sm">Connected</span>';
+        };
+        
+        ws.onclose = function() {
+            document.getElementById('connection-indicator').innerHTML = 
+                '<span class="status-indicator status-error"></span><span class="text-sm">Disconnected</span>';
+        };
+        
+        ws.onerror = function() {
+            document.getElementById('connection-indicator').innerHTML = 
+                '<span class="status-indicator status-error"></span><span class="text-sm">Error</span>';
+        };
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            updateDisplay(data);
+        };
+        
+        function updateDisplay(data) {
+            if (!data.imu2) return;
+            
+            const imu2 = data.imu2;
+            calculateUpdateRate();
+            
+            // Update raw data
+            if (imu2.acceleration) {
+                accelData.x = imu2.acceleration.x || 0;
+                accelData.y = imu2.acceleration.y || 0;
+                accelData.z = imu2.acceleration.z || 0;
+                
+                document.getElementById('accel-x').textContent = formatValue(accelData.x);
+                document.getElementById('accel-y').textContent = formatValue(accelData.y);
+                document.getElementById('accel-z').textContent = formatValue(accelData.z);
+            }
+            
+            if (imu2.gyration) {
+                gyroData.x = imu2.gyration.x || 0;
+                gyroData.y = imu2.gyration.y || 0;
+                gyroData.z = imu2.gyration.z || 0;
+                
+                document.getElementById('gyro-x').textContent = formatValue(gyroData.x);
+                document.getElementById('gyro-y').textContent = formatValue(gyroData.y);
+                document.getElementById('gyro-z').textContent = formatValue(gyroData.z);
+            }
+            
+            if (imu2.quaternion) {
+                quatData.w = imu2.quaternion.w || 1;
+                quatData.x = imu2.quaternion.x || 0;
+                quatData.y = imu2.quaternion.y || 0;
+                quatData.z = imu2.quaternion.z || 0;
+                
+                document.getElementById('quat-w').textContent = formatValue(quatData.w);
+                document.getElementById('quat-x').textContent = formatValue(quatData.x);
+                document.getElementById('quat-y').textContent = formatValue(quatData.y);
+                document.getElementById('quat-z').textContent = formatValue(quatData.z);
+            }
+            
+            // Calculate derived values
+            const totalAccel = calculateTotalAcceleration(accelData.x, accelData.y, accelData.z);
+            const totalGyro = calculateTotalGyro(gyroData.x, gyroData.y, gyroData.z);
+            const quatMagnitude = Math.sqrt(quatData.w*quatData.w + quatData.x*quatData.x + quatData.y*quatData.y + quatData.z*quatData.z);
+            const euler = quaternionToEuler(quatData.w, quatData.x, quatData.y, quatData.z);
+            
+            // Update displays
+            document.getElementById('accel-magnitude').textContent = formatValue(totalAccel, 2);
+            document.getElementById('gyro-magnitude').textContent = formatValue(totalGyro, 2);
+            document.getElementById('quat-magnitude').textContent = formatValue(quatMagnitude);
+            
+            document.getElementById('total-accel').textContent = formatValue(totalAccel, 2) + ' g';
+            document.getElementById('total-gyro').textContent = formatValue(totalGyro, 2) + ' °/s';
+            
+            document.getElementById('lateral-g').textContent = formatValue(accelData.y, 2) + ' g';
+            document.getElementById('longitudinal-g').textContent = formatValue(accelData.x, 2) + ' g';
+            document.getElementById('vertical-g').textContent = formatValue(accelData.z, 2) + ' g';
+            
+            document.getElementById('roll-rate').textContent = formatValue(gyroData.x, 2) + ' °/s';
+            document.getElementById('pitch-rate').textContent = formatValue(gyroData.y, 2) + ' °/s';
+            document.getElementById('yaw-rate').textContent = formatValue(gyroData.z, 2) + ' °/s';
+            
+            document.getElementById('euler-roll').textContent = formatValue(euler.roll, 1) + '°';
+            document.getElementById('euler-pitch').textContent = formatValue(euler.pitch, 1) + '°';
+            document.getElementById('euler-yaw').textContent = formatValue(euler.yaw, 1) + '°';
+            
+            // Update status
+            const isActive = imu2.last_update && (Date.now() - new Date(imu2.last_update).getTime()) < 5000;
+            const statusElement = document.getElementById('imu2-status');
+            if (isActive) {
+                statusElement.innerHTML = '<span class="status-indicator status-ok"></span><span class="text-white text-sm">在線</span>';
+            } else {
+                statusElement.innerHTML = '<span class="status-indicator status-error"></span><span class="text-white text-sm">離線</span>';
+            }
+            
+            // Update visual indicators
+            updateVisualIndicators();
+            
+            // Update charts
+            if (data.update_time) {
+                updateCharts(data.update_time);
+            }
+            
+            // Update general info
+            document.getElementById('message-count').textContent = data.message_count || 0;
+            if (data.update_time) {
+                document.getElementById('last-update').textContent = new Date(data.update_time).toLocaleString();
+            }
+        }
+        
+        // Initialize everything when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            init3DScene();
+            initCharts();
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                const container = document.getElementById('vehicle-3d');
+                camera.aspect = container.offsetWidth / container.offsetHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.offsetWidth, container.offsetHeight);
+            });
+        });
+    </script>
+</body>
+</html>

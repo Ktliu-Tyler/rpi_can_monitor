@@ -1,4 +1,3 @@
-
 class NTURTDashboard {
     constructor() {
         this.websocket = null;
@@ -31,7 +30,27 @@ class NTURTDashboard {
         console.log('NTURT Dashboard initialized');
     }
 
+    closeWebSocket() {
+        if (this.websocket) {
+            // Remove event listeners to prevent them from firing during cleanup
+            this.websocket.onopen = null;
+            this.websocket.onmessage = null;
+            this.websocket.onclose = null;
+            this.websocket.onerror = null;
+            
+            // Check readyState before closing to avoid errors on already closed sockets
+            if (this.websocket.readyState === WebSocket.OPEN || this.websocket.readyState === WebSocket.CONNECTING) {
+                this.websocket.close();
+            }
+            this.websocket = null;
+            this.isConnected = false;
+            console.log('Previous WebSocket connection closed and cleaned up.');
+        }
+    }
+
     initWebSocket() {
+        this.closeWebSocket(); // Ensure any old connection is cleaned up first
+
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
         const wsUrl = `${protocol}://${window.location.host}/ws`;
                 
@@ -56,10 +75,12 @@ class NTURTDashboard {
             };
             
             this.websocket.onclose = () => {
-                this.isConnected = false;
-                this.updateConnectionStatus(false);
-                console.log('WebSocket disconnected');
-                this.scheduleReconnect();
+                if (this.isConnected) { // Only log and schedule reconnect if it was a real connection
+                    this.isConnected = false;
+                    this.updateConnectionStatus(false);
+                    console.log('WebSocket disconnected. Scheduling reconnect...');
+                    this.scheduleReconnect();
+                }
             };
             
             this.websocket.onerror = (error) => {
@@ -1399,9 +1420,8 @@ class NTURTDashboard {
 
     // Clean up resources
     destroy() {
-        if (this.websocket) {
-            this.websocket.close();
-        }
+        this.closeWebSocket(); // Use the new robust cleanup method
+
         if (this.torqueChart) {
             this.torqueChart.destroy();
         }

@@ -61,11 +61,15 @@ class CanReceiverWebApp:
             self.bus = None
             self.load_csv_file()
         else:
-            try:
-                self.bus = can.interface.Bus(channel='can0', bustype='socketcan')
-            except Exception as e:
-                print(f"Warning: Could not initialize CAN bus: {e}")
+            if os.name == 'posix':
+                try:
+                    self.bus = can.interface.Bus(channel='can0', bustype='socketcan')
+                except Exception as e:
+                    print(f"Warning: Could not initialize CAN bus on Linux: {e}")
+                    self.bus = None
+            else:
                 self.bus = None
+                print("CAN bus initialization skipped on non-Linux OS.")
         
         print("CAN Receiver Web App Started")
 
@@ -356,6 +360,8 @@ class CanReceiverWebApp:
 
     def is_can_available(self):
         """檢查 CAN 介面是否可用"""
+        if os.name != 'posix':
+            return False
         try:
             test_bus = can.interface.Bus(channel='can0', bustype='socketcan')
             test_bus.shutdown()
@@ -365,21 +371,25 @@ class CanReceiverWebApp:
 
     def send_can_control_command(self, command_byte):
         """發送 CAN 控制命令到 0x420"""
-        if not self.is_can_available():
-            return False, "CAN interface not available"
-        
+        # 檢查是否在 CAN 模式且 bus 已被初始化
+        if self.use_csv or not self.bus:
+            msg = "Not in CAN mode or CAN bus not initialized."
+            print(msg)
+            return False, msg
+
         try:
-            temp_bus = can.interface.Bus(channel='can0', bustype='socketcan')
+            # 重用 self.bus 來發送訊息
             data = [command_byte] + [0x00] * 7  # 第一個 byte 是命令，其餘填 0
             message = can.Message(arbitration_id=0x420, data=data, is_extended_id=False)
-            temp_bus.send(message)
-            temp_bus.shutdown()
+            self.bus.send(message)
             
             command_name = "START" if command_byte == 0x01 else "STOP" if command_byte == 0x02 else "UNKNOWN"
-            print(f"Sent CAN control command: {command_name} (0x420: {command_byte:02X})")
+            print(f"Sent CAN control command via self.bus: {command_name} (0x420: {command_byte:02X})")
             return True, f"Successfully sent {command_name} command"
         except Exception as e:
-            return False, f"Failed to send CAN command: {str(e)}"
+            error_msg = f"Failed to send CAN command using self.bus: {str(e)}"
+            print(error_msg)
+            return False, error_msg
 
     async def broadcast_data(self):
         """廣播數據到所有連接的客戶端"""
@@ -481,7 +491,7 @@ async def read_index(request: Request):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
+    return templates.TemplateResponse("chart_dashboard-v3.html", {"request": request})
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
