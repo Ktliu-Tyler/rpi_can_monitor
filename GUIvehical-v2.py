@@ -834,6 +834,8 @@ class CanReceiverWebApp:
             speed_raw = struct.unpack('<h', data[4:6])[0]
             feedback_torque = feedback_torque_raw / 1000.0 * 25
             speed = speed_raw
+            if inv_num == (0x213-0x210):
+                feedback_torque *= -1
             
             if inv_num in self.data_store['inverters']:
                 current_time = time.time()
@@ -887,7 +889,8 @@ class CanReceiverWebApp:
             control_word = struct.unpack('<H', data[0:2])[0]
             target_torque_raw = struct.unpack('<h', data[2:4])[0]
             target_torque = target_torque_raw / 1000.0 * 20
-            
+            if inv_num == (0x213-0x210):
+                target_torque *= -1
             if inv_num in self.data_store['inverters']:
                 current_time = time.time()
                 self.data_store['inverters'][inv_num]['control_word'] = control_word
@@ -909,6 +912,10 @@ async def read_index(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
+
+@app.get("/IMU", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    return templates.TemplateResponse("IMU2_3D_dashboard.html", {"request": request})
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):

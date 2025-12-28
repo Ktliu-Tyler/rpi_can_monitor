@@ -891,6 +891,10 @@ async def read_index(request: Request):
 async def dashboard(request: Request):
     return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
 
+@app.get("/imu", response_class=HTMLResponse)
+async def dashboard(request: Request): 
+    return templates.TemplateResponse("IMU_dashboard.html", {"request": request})
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("enhanced_racing_dashboard.html", {"request": request})
