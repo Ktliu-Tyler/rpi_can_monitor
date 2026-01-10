@@ -15,6 +15,7 @@ class NTURTDashboard {
         // Chart instances
         this.torqueChart = null;
         this.rpmChart = null;
+        this.motorTempChart = null;
         this.cellVoltageChart = null;
         this.cellTempChart = null;     
         
@@ -27,7 +28,7 @@ class NTURTDashboard {
         this.loadAvailableFiles();
         this.loadCurrentMode();
         this.loadCanLoggingStatus();
-        console.log('NTURT Dashboard initialized');
+        console.log('NTURT Dashboard initialized 20251228 version');
     }
 
     closeWebSocket() {
@@ -619,6 +620,82 @@ class NTURTDashboard {
             });
         }
 
+        // Initialize Motor Temperature Chart
+        const motorTempCtx = document.getElementById('motor-temp-chart');
+        if (motorTempCtx) {
+            this.motorTempChart = new Chart(motorTempCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'FL Motor',
+                            data: [],
+                            borderColor: '#a78bfa',
+                            backgroundColor: 'rgba(167, 139, 250, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'FR Motor',
+                            data: [],
+                            borderColor: '#60a5fa',
+                            backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'RL Motor',
+                            data: [],
+                            borderColor: '#34d399',
+                            backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'RR Motor',
+                            data: [],
+                            borderColor: '#fbbf24',
+                            backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                            tension: 0.4,
+                            pointRadius: 0,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#e2e8f0' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        },
+                        y: {
+                            min: 0,
+                            max: 100,
+                            ticks: { color: '#94a3b8' },
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' },
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)',
+                                color: '#e2e8f0'
+                            }
+                        }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+
         // Initialize Cell Voltage Chart
         const cellVoltageCtx = document.getElementById('cell-voltage-chart');
         if (cellVoltageCtx) {
@@ -756,6 +833,33 @@ class NTURTDashboard {
             
             this.rpmChart.update('none');
         }
+
+        // Update Motor Temperature Chart
+        if (this.motorTempChart && data.inverters) {
+            const motorTempData = [
+                data.inverters[1]?.motor_temp || 0,
+                data.inverters[2]?.motor_temp || 0,
+                data.inverters[3]?.motor_temp || 0,
+                data.inverters[4]?.motor_temp || 0
+            ];
+            
+            // Add new data point
+            this.motorTempChart.data.labels.push(currentTime);
+            this.motorTempChart.data.datasets.forEach((dataset, index) => {
+                dataset.data.push(motorTempData[index]);
+            });
+            
+            // Limit data points
+            if (this.motorTempChart.data.labels.length > this.maxHistoryPoints) {
+                this.motorTempChart.data.labels.shift();
+                this.motorTempChart.data.datasets.forEach(dataset => {
+                    dataset.data.shift();
+                });
+            }
+            
+            this.motorTempChart.update('none');
+        }
+
         // Update Cell Voltage Chart
         if (this.cellVoltageChart && data.accumulator && data.accumulator.cell_voltages) {
             const voltageGroups = this.processCellVoltages(data.accumulator.cell_voltages);

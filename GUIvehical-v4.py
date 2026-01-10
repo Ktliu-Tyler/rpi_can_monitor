@@ -14,7 +14,7 @@ import threading
 from typing import List
 import csv
 import os
-# _0801_0831
+# 0103
 
 
 app = FastAPI()
@@ -139,7 +139,22 @@ class CanReceiverWebApp:
             'vcu': {
                 'steer': None, 'accel': None, 'apps1': None,    
                 'apps2': None, 'brake': None, 'bse1': None, 'bse2': None,
-                'last_update': None}
+                'suspF': None, 'suspR': None,
+                'last_update': None},
+            'imu': {
+                'accel_km6': {'x': None, 'y': None, 'z': None},
+                'accel_km308': {'x': None, 'y': None, 'z': None},
+                'gyro': {'x': None, 'y': None, 'z': None},
+                'euler': {'roll': None, 'pitch': None, 'yaw': None},
+                'mag': {'x': None, 'y': None, 'z': None},
+                'last_update': None
+            },
+            'imu2': {
+                'accel': {'x': None, 'y': None, 'z': None},
+                'gyro': {'x': None, 'y': None, 'z': None},
+                'quaternion': {'w': None, 'x': None, 'y': None, 'z': None},
+                'last_update': None
+            }
         }
         
         self.message_count = 0
@@ -484,6 +499,8 @@ class CanReceiverWebApp:
             'accumulator': self.data_store['accumulator'],
             'inverters': self.data_store['inverters'],
             'vcu': self.data_store['vcu'],
+            'imu': self.data_store['imu'],
+            'imu2': self.data_store['imu2'],
             'message_count': self.message_count,
             'update_time': datetime.now().isoformat(),
             'playback_control': self.get_playback_status() 
@@ -522,14 +539,15 @@ class CanReceiverWebApp:
             await asyncio.sleep(0.1)
 
     async def real_can1_receive_callback(self):
-        """CAN1 接收回調函數，專門處理 GPS 數據 (async)"""
+        """CAN1 接收回調函數，專門處理 GPS 和 IMU2 數據 (async)"""
         try:
             if self.bus1:
                 message = self.bus1.recv(timeout=0.001)
                 if message:
-                    # 只處理 GPS 相關的訊息 (0x400, 0x401, 0x410-0x419)
+                    # 處理 GPS 相關的訊息 (0x400, 0x401, 0x410-0x419) 和 IMU2 (0x188, 0x288, 0x488)
                     can_id = message.arbitration_id
-                    if can_id in [0x400, 0x401] or (0x410 <= can_id <= 0x419):
+                    if (can_id in [0x400, 0x401, 0x188, 0x288, 0x488] or 
+                        (0x410 <= can_id <= 0x419)):
                         self.message_count += 1
                         self.process_can_message(message)
             # await asyncio.sleep(0.001) # REMOVED, handled by receiver_loop
@@ -585,6 +603,8 @@ class CanReceiverWebApp:
             
             elif can_id == 0x181:
                 self.decode_vcu_cockpit(data)
+            elif can_id == 0x381:
+                self.decode_vcu_suspension(data)
             # GPS 解碼
             elif can_id == 0x400:
                 self.decode_gps_basic(data)
@@ -612,15 +632,15 @@ class CanReceiverWebApp:
                 self.decode_velocity_magnitude(data)
             
             # Accumulator 解碼
-            elif can_id == 0x190:
+            elif can_id == 0x601:
                 self.decode_cell_voltage(data)
-            elif can_id == 0x390:
+            elif can_id == 0x651:
                 self.decode_accumulator_temperature(data)
             elif can_id == 0x710:
                 self.decode_accumulator_heartbeat(data)
-            elif can_id == 0x290:
+            elif can_id == 0x501:
                 self.decode_accumulator_status(data)
-            elif can_id == 0x490:
+            elif can_id == 0x511:
                 self.decode_accumulator_state(data)
             
             # Inverter 解碼
@@ -639,6 +659,26 @@ class CanReceiverWebApp:
             elif 0x210 <= can_id <= 0x214:
                 inv_num = can_id - 0x210
                 self.decode_inverter_control(data, inv_num)
+            
+            # IMU 解碼
+            elif can_id == 0x185:
+                self.decode_imu_accel_km6(data)
+            elif can_id == 0x426:
+                self.decode_imu_accel_km308(data)
+            elif can_id == 0x285:
+                self.decode_imu_gyro(data)
+            elif can_id == 0x385:
+                self.decode_imu_euler(data)
+            elif can_id == 0x429:
+                self.decode_imu_mag(data)
+            
+            # IMU2 解碼
+            elif can_id == 0x188:
+                self.decode_imu2_accel(data)
+            elif can_id == 0x288:
+                self.decode_imu2_gyro(data)
+            elif can_id == 0x488:
+                self.decode_imu2_quaternion(data)
 
         except Exception as e:
             print(f"Failed to decode CAN message ID 0x{can_id:03X}: {e}")
@@ -678,6 +718,26 @@ class CanReceiverWebApp:
             self.data_store['vcu']['brake'] = brake_raw
             self.data_store['vcu']['bse1'] = bse1_raw
             self.data_store['vcu']['bse2'] = bse2_raw
+            self.data_store['vcu']['last_update'] = current_time
+
+    def decode_vcu_suspension(self, data):
+        """解碼前後懸吊數據 (0x381)
+        SuspF: bytes 0-1, 公式: 值 * 0.0001 + 0.3 (m)
+        SuspR: bytes 2-3, 公式: 值 * 0.0001 + 0.3 (m)
+        """
+        if len(data) >= 4:
+            # 前懸吊 (bytes 0-1)
+            suspF_raw = struct.unpack('<H', data[0:2])[0]
+            suspF = suspF_raw * 0.0001 + 0.3
+            
+            # 後懸吊 (bytes 2-3)
+            suspR_raw = struct.unpack('<H', data[2:4])[0]
+            suspR = suspR_raw * 0.0001 + 0.3
+            
+            # 更新 VCU 數據
+            current_time = time.time()
+            self.data_store['vcu']['suspF'] = suspF
+            self.data_store['vcu']['suspR'] = suspR
             self.data_store['vcu']['last_update'] = current_time
 
     def decode_gps_basic(self, data):
@@ -949,6 +1009,179 @@ class CanReceiverWebApp:
                 self.data_store['inverters'][inv_num]['target_torque'] = target_torque
                 self.data_store['inverters'][inv_num]['last_update'] = current_time
 
+    # IMU 解碼函數
+    def decode_imu_accel_km6(self, data):
+        """解碼IMU加速度數據km6 (0x185)
+        X: bytes 0-1, Y: bytes 2-3, Z: bytes 4-5
+        格式: 0.001 m/s^2 /LSB (signed)
+        """
+        if len(data) >= 6:
+            x_raw = struct.unpack('<h', data[0:2])[0]
+            y_raw = struct.unpack('<h', data[2:4])[0]
+            z_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 m/s^2
+            x = x_raw * 0.001
+            y = y_raw * 0.001
+            z = z_raw * 0.001
+            
+            current_time = time.time()
+            self.data_store['imu']['accel_km6']['x'] = x
+            self.data_store['imu']['accel_km6']['y'] = y
+            self.data_store['imu']['accel_km6']['z'] = z
+            self.data_store['imu']['last_update'] = current_time
+
+    def decode_imu_accel_km308(self, data):
+        """解碼IMU加速度數據km308 (0x426)
+        X: bytes 0-1, Y: bytes 2-3, Z: bytes 4-5
+        格式: 0.001 m/s^2 /LSB (signed)
+        """
+        if len(data) >= 6:
+            x_raw = struct.unpack('<h', data[0:2])[0]
+            y_raw = struct.unpack('<h', data[2:4])[0]
+            z_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 m/s^2
+            x = x_raw * 0.001
+            y = y_raw * 0.001
+            z = z_raw * 0.001
+            
+            current_time = time.time()
+            self.data_store['imu']['accel_km308']['x'] = x
+            self.data_store['imu']['accel_km308']['y'] = y
+            self.data_store['imu']['accel_km308']['z'] = z
+            self.data_store['imu']['last_update'] = current_time
+
+    def decode_imu_gyro(self, data):
+        """解碼IMU陀螺儀數據 (0x285)
+        X: bytes 0-1, Y: bytes 2-3, Z: bytes 4-5
+        格式: 0.1 deg/s /LSB (signed)
+        """
+        if len(data) >= 6:
+            x_raw = struct.unpack('<h', data[0:2])[0]
+            y_raw = struct.unpack('<h', data[2:4])[0]
+            z_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 deg/s
+            x = x_raw * 0.1
+            y = y_raw * 0.1
+            z = z_raw * 0.1
+            
+            current_time = time.time()
+            self.data_store['imu']['gyro']['x'] = x
+            self.data_store['imu']['gyro']['y'] = y
+            self.data_store['imu']['gyro']['z'] = z
+            self.data_store['imu']['last_update'] = current_time
+
+    def decode_imu_euler(self, data):
+        """解碼IMU歐拉角數據 (0x385)
+        Roll: bytes 0-1, Pitch: bytes 2-3, Yaw: bytes 4-5
+        格式: 0.01 degree /LSB (signed)
+        """
+        if len(data) >= 6:
+            roll_raw = struct.unpack('<h', data[0:2])[0]
+            pitch_raw = struct.unpack('<h', data[2:4])[0]
+            yaw_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 degree
+            roll = roll_raw * 0.01
+            pitch = pitch_raw * 0.01
+            yaw = yaw_raw * 0.01
+            
+            current_time = time.time()
+            self.data_store['imu']['euler']['roll'] = roll
+            self.data_store['imu']['euler']['pitch'] = pitch
+            self.data_store['imu']['euler']['yaw'] = yaw
+            self.data_store['imu']['last_update'] = current_time
+
+    def decode_imu_mag(self, data):
+        """解碼IMU磁力計數據 (0x429)
+        X: bytes 0-1, Y: bytes 2-3, Z: bytes 4-5
+        格式: 0.1 uT /LSB (signed)
+        """
+        if len(data) >= 6:
+            x_raw = struct.unpack('<h', data[0:2])[0]
+            y_raw = struct.unpack('<h', data[2:4])[0]
+            z_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 uT (微特斯拉)
+            x = x_raw * 0.1
+            y = y_raw * 0.1
+            z = z_raw * 0.1
+            
+            current_time = time.time()
+            self.data_store['imu']['mag']['x'] = x
+            self.data_store['imu']['mag']['y'] = y
+            self.data_store['imu']['mag']['z'] = z
+            self.data_store['imu']['last_update'] = current_time
+
+    # IMU2 解碼函數
+    def decode_imu2_accel(self, data):
+        """解碼IMU2加速度數據 (0x188)
+        X: bytes 0-1, Y: bytes 2-3, Z: bytes 4-5
+        格式: 0.001 g/LSB (signed)
+        """
+        if len(data) >= 6:
+            x_raw = struct.unpack('<h', data[0:2])[0]
+            y_raw = struct.unpack('<h', data[2:4])[0]
+            z_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 g
+            x = x_raw * 0.001
+            y = y_raw * 0.001
+            z = z_raw * 0.001
+            
+            current_time = time.time()
+            self.data_store['imu2']['accel']['x'] = x
+            self.data_store['imu2']['accel']['y'] = y
+            self.data_store['imu2']['accel']['z'] = z
+            self.data_store['imu2']['last_update'] = current_time
+
+    def decode_imu2_gyro(self, data):
+        """解碼IMU2陀螺儀數據 (0x288)
+        X: bytes 0-1, Y: bytes 2-3, Z: bytes 4-5
+        格式: 0.1 deg/s /LSB (signed)
+        """
+        if len(data) >= 6:
+            x_raw = struct.unpack('<h', data[0:2])[0]
+            y_raw = struct.unpack('<h', data[2:4])[0]
+            z_raw = struct.unpack('<h', data[4:6])[0]
+            
+            # 轉換為 deg/s
+            x = x_raw * 0.1
+            y = y_raw * 0.1
+            z = z_raw * 0.1
+            
+            current_time = time.time()
+            self.data_store['imu2']['gyro']['x'] = x
+            self.data_store['imu2']['gyro']['y'] = y
+            self.data_store['imu2']['gyro']['z'] = z
+            self.data_store['imu2']['last_update'] = current_time
+
+    def decode_imu2_quaternion(self, data):
+        """解碼IMU2四元數數據 (0x488)
+        W: bytes 0-1, X: bytes 2-3, Y: bytes 4-5, Z: bytes 6-7
+        格式: 0.0001 /LSB (signed)
+        """
+        if len(data) >= 8:
+            w_raw = struct.unpack('<h', data[0:2])[0]
+            x_raw = struct.unpack('<h', data[2:4])[0]
+            y_raw = struct.unpack('<h', data[4:6])[0]
+            z_raw = struct.unpack('<h', data[6:8])[0]
+            
+            # 轉換為單位四元數
+            w = w_raw * 0.0001
+            x = x_raw * 0.0001
+            y = y_raw * 0.0001
+            z = z_raw * 0.0001
+            
+            current_time = time.time()
+            self.data_store['imu2']['quaternion']['w'] = w
+            self.data_store['imu2']['quaternion']['x'] = x
+            self.data_store['imu2']['quaternion']['y'] = y
+            self.data_store['imu2']['quaternion']['z'] = z
+            self.data_store['imu2']['last_update'] = current_time
+
 # global CAN receiver instance
 can_receiver = None
 
@@ -970,6 +1203,10 @@ async def dashboard(request: Request):
     return templates.TemplateResponse("chart_dashboard-v3.html", {"request": request})
     # return templates.TemplateResponse("IMU2_3D_dashboard.html", {"request": request})
 
+@app.get("/imu", response_class=HTMLResponse)
+async def imu_dashboard(request: Request):
+    return templates.TemplateResponse("imu_realtime_dashboard.html", {"request": request})
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("enhanced_racing_dashboard.html", {"request": request})
@@ -985,6 +1222,8 @@ async def get_data():
             'accumulator': can_receiver.data_store['accumulator'],
             'inverters': can_receiver.data_store['inverters'],
             'vcu': can_receiver.data_store['vcu'],
+            'imu': can_receiver.data_store['imu'],
+            'imu2': can_receiver.data_store['imu2'],
             'message_count': can_receiver.message_count,
             'update_time': datetime.now().isoformat()
         }
