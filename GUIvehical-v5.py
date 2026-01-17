@@ -14,8 +14,7 @@ import threading
 from typing import List
 import csv
 import os
-# 0103
-
+# 0112 update distance
 
 app = FastAPI()
 app.add_middleware(
@@ -153,6 +152,10 @@ class CanReceiverWebApp:
                 'accel': {'x': None, 'y': None, 'z': None},
                 'gyro': {'x': None, 'y': None, 'z': None},
                 'quaternion': {'w': None, 'x': None, 'y': None, 'z': None},
+                'last_update': None
+            },
+            'distance': {
+                'trip_distance_km': None,
                 'last_update': None
             }
         }
@@ -496,6 +499,7 @@ class CanReceiverWebApp:
             'timestamp': self.data_store['timestamp']['time'].isoformat() if self.data_store['timestamp']['time'] else None,
             'gps': self.data_store['gps'],
             'velocity': self.data_store['velocity'],
+            'distance': self.data_store['distance'],
             'accumulator': self.data_store['accumulator'],
             'inverters': self.data_store['inverters'],
             'vcu': self.data_store['vcu'],
@@ -539,17 +543,13 @@ class CanReceiverWebApp:
             await asyncio.sleep(0.1)
 
     async def real_can1_receive_callback(self):
-        """CAN1 接收回調函數，專門處理 GPS 和 IMU2 數據 (async)"""
+        """CAN1 接收回調函數 (async)"""
         try:
             if self.bus1:
                 message = self.bus1.recv(timeout=0.001)
                 if message:
-                    # 處理 GPS 相關的訊息 (0x400, 0x401, 0x410-0x419) 和 IMU2 (0x188, 0x288, 0x488)
-                    can_id = message.arbitration_id
-                    if (can_id in [0x400, 0x401, 0x188, 0x288, 0x488] or 
-                        (0x410 <= can_id <= 0x419)):
-                        self.message_count += 1
-                        self.process_can_message(message)
+                    self.message_count += 1
+                    self.process_can_message(message)
             # await asyncio.sleep(0.001) # REMOVED, handled by receiver_loop
         except Exception as e:
             await asyncio.sleep(0.1)
@@ -630,6 +630,9 @@ class CanReceiverWebApp:
                 self.decode_angular_z(data)
             elif can_id == 0x408:
                 self.decode_velocity_magnitude(data)
+            elif can_id == 0x440:
+                print(f"[DEBUG] Received CAN ID 0x440, data: {data.hex()}")
+                self.decode_distance(data)
             
             # Accumulator 解碼
             elif can_id == 0x601:
@@ -850,6 +853,19 @@ class CanReceiverWebApp:
             self.data_store['velocity']['magnitude'] = vmag
             self.data_store['velocity']['speed_kmh'] = speed_kmh
             self.data_store['velocity']['last_update'] = current_time
+
+    def decode_distance(self, data):
+        """解碼 CAN ID 0x440 的里程數據 (來自 can1)"""
+        if len(data) >= 4:
+            # 解包32位無符號整數 (little-endian)，單位為毫米 (mm)
+            distance_mm = struct.unpack('<I', data[0:4])[0]
+            # 轉換為公里 (km)
+            distance_km = distance_mm / 1000000.0
+            
+            current_time = time.time()
+            self.data_store['distance']['trip_distance_km'] = distance_km
+            self.data_store['distance']['last_update'] = current_time
+            print(f"[DISTANCE] Received: {distance_mm} mm = {distance_km:.3f} km")
 
     def decode_cell_voltage(self, data):
         if len(data) >= 8:
@@ -1190,15 +1206,15 @@ can_receiver = None
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-@app.get("/gps", response_class=HTMLResponse)
-async def read_index(request: Request):
-    return templates.TemplateResponse("gps_dashboard.html", {"request": request})
+# @app.get("/gps", response_class=HTMLResponse)
+# async def read_index(request: Request):
+#     return templates.TemplateResponse("gps_dashboard.html", {"request": request})
+
+# @app.get("/dashboard", response_class=HTMLResponse)
+# async def dashboard(request: Request):
+#     return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
 
 @app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
-
-@app.get("/dashboard2", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse("chart_dashboard-v4.html", {"request": request})
     # return templates.TemplateResponse("IMU2_3D_dashboard.html", {"request": request})
@@ -1219,6 +1235,7 @@ async def get_data():
             'timestamp': can_receiver.data_store['timestamp']['time'].isoformat() if can_receiver.data_store['timestamp']['time'] else None,
             'gps': can_receiver.data_store['gps'],
             'velocity': can_receiver.data_store['velocity'],
+            'distance': can_receiver.data_store['distance'],
             'accumulator': can_receiver.data_store['accumulator'],
             'inverters': can_receiver.data_store['inverters'],
             'vcu': can_receiver.data_store['vcu'],
