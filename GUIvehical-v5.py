@@ -1210,9 +1210,13 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # async def read_index(request: Request):
 #     return templates.TemplateResponse("gps_dashboard.html", {"request": request})
 
-# @app.get("/dashboard", response_class=HTMLResponse)
-# async def dashboard(request: Request):
-#     return templates.TemplateResponse("chart_dashboard-v2.html", {"request": request})
+@app.get("/AMS", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    return templates.TemplateResponse("battery_dashboard _666.html", {"request": request})
+
+@app.get("/TQ", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    return templates.TemplateResponse("dashchart.html", {"request": request})
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):

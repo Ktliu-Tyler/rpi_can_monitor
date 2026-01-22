@@ -349,6 +349,18 @@ def main():
                         is_extended_id=False
                     )
                     bus1.send(distance_msg)
+                    
+                    # Also record this message to CSV
+                    if recording and writer:
+                        timestamp = int(time.time() * 1000000)
+                        can_id = f"{distance_msg.arbitration_id:08X}"
+                        extended = 'false'
+                        direction = 'Tx'
+                        bus_num = 1  # can1
+                        dlc = len(distance_msg.data)
+                        data_bytes = [f"{byte:02X}" for byte in distance_msg.data]
+                        writer.writerow([timestamp, can_id, extended, direction, bus_num, dlc] + data_bytes)
+                    
                     last_distance_send = current_time
                 except Exception as e:
                     print(f"Failed to send distance message: {e}")

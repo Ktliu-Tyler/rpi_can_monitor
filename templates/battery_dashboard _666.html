@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTURT Battery Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Glass Card Effect */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        /* Connection Indicator */
+        .connection-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-indicator.connected {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border: 1px solid #22c55e;
+        }
+
+        .connection-indicator.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .status-dot.green {
+            background: #22c55e;
+        }
+
+        .status-dot.red {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Floating message counter */
+        .floating-stats {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 12px;
+            padding: 12px 16px;
+            z-index: 1000;
+            min-width: 180px;
+        }
+
+        .floating-stats-title {
+            font-size: 10px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .floating-stats-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #06b6d4;
+            line-height: 1;
+        }
+
+        .floating-stats-time {
+            font-size: 10px;
+            color: #64748b;
+            margin-top: 4px;
+        }
+
+        /* Scroll to top button */
+        .scroll-to-top {
+            position: fixed;
+            bottom: 30px;
+            left: 15px;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s;
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .scroll-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .scroll-to-top:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+
+        .scroll-to-top svg {
+            width: 24px;
+            height: 24px;
+            fill: white;
+        }
+
+        /* Cell Display */
+        .cell-item {
+            background: rgba(51, 65, 85, 0.5);
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+            height: auto;
+        }
+
+        .cell-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .cell-normal {
+            border-left: 3px solid #22c55e;
+        }
+
+        .cell-warning {
+            border-left: 3px solid #eab308;
+            background: rgba(234, 179, 8, 0.1);
+        }
+
+        .cell-danger {
+            border-left: 3px solid #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .cell-label {
+            font-size: 0.65rem;
+            color: #94a3b8;
+            margin-bottom: 2px;
+        }
+
+        .cell-value {
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #ffffff;
+        }
+
+        /* Collapsible Section */
+        .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .collapsible-header:hover {
+            opacity: 0.8;
+        }
+
+        .collapse-icon {
+            transition: transform 0.3s;
+            font-size: 1.5rem;
+            color: #94a3b8;
+        }
+
+        .collapse-icon.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .collapsible-content {
+            max-height: 10000px;
+            overflow: hidden;
+            transition: max-height 0.5s ease-out, opacity 0.3s;
+            opacity: 1;
+        }
+
+        .collapsible-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+        }
+
+        /* Segment Stats */
+        .segment-header {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+        }
+
+        .segment-stat {
+            display: inline-block;
+            margin-right: 20px;
+            font-size: 0.875rem;
+        }
+
+        .segment-stat-label {
+            color: #94a3b8;
+            margin-right: 4px;
+        }
+
+        .segment-stat-value {
+            font-weight: 700;
+        }
+
+        /* Temperature Colors */
+        .temp-cold {
+            color: #22c55e;
+        }
+
+        .temp-warm {
+            color: #eab308;
+        }
+
+        .temp-hot {
+            color: #ef4444;
+        }
+
+        /* Accumulator Overview Stats */
+        .stat-card {
+            background: rgba(51, 65, 85, 0.5);
+            border-radius: 12px;
+            padding: 16px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .stat-subtext {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        .stat-mini {
+            font-size: 0.7rem;
+            color: #cbd5e1;
+            margin-top: 4px;
+        }
+
+        /* Segment Overview */
+        .segment-overview-card {
+            background: rgba(51, 65, 85, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .segment-overview-voltage-section,
+        .segment-overview-temp-section {
+            cursor: pointer;
+            padding: 8px;
+            margin: -8px -8px 4px -8px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .segment-overview-voltage-section:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .segment-overview-temp-section {
+            margin: 4px -8px -8px -8px;
+        }
+
+        .segment-overview-temp-section:hover {
+            background: rgba(251, 146, 60, 0.1);
+        }
+
+        .segment-overview-title {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .segment-overview-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 0.75rem;
+        }
+
+        .segment-overview-stat {
+            flex: 1;
+        }
+
+        .segment-overview-label {
+            color: #64748b;
+            margin-bottom: 2px;
+        }
+
+        .segment-overview-value {
+            font-weight: 700;
+            font-size: 0.875rem;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-indicator disconnected">
+        <span class="status-dot red"></span>
+        <span id="connection-text">Connecting...</span>
+    </div>
+
+    <!-- Floating Message Stats -->
+    <div class="floating-stats">
+        <div class="floating-stats-title">CAN Messages</div>
+        <div class="floating-stats-value" id="floating-message-count">0</div>
+        <div class="floating-stats-time" id="floating-current-time">--:--:--</div>
+    </div>
+
+    <!-- Scroll to Top Button -->
+    <div class="scroll-to-top" id="scrollToTopBtn" onclick="scrollToTop()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M12 4l-8 8h5v8h6v-8h5z"/>
+        </svg>
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
+                NTURT Battery Dashboard
+            </h1>
+            <p class="text-slate-400 mt-2">Real-time Battery Monitoring System</p>
+        </div>
+
+        <!-- Accumulator Overview -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <h2 class="text-2xl font-bold text-blue-400 mb-4">Accumulator Overview</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- SOC -->
+                <div class="stat-card">
+                    <div class="stat-label">State of Charge</div>
+                    <div class="stat-value text-green-400" id="acc-soc">--%</div>
+                </div>
+
+                <!-- Total Voltage -->
+                <div class="stat-card" style="border-left-color: #eab308;">
+                    <div class="stat-label">Total Voltage</div>
+                    <div class="stat-value text-white" id="acc-voltage">--V</div>
+                    <div class="stat-mini">
+                        Max: <span id="acc-voltage-max-seg">--</span> (<span id="acc-voltage-max">--V</span>) | 
+                        Min: <span id="acc-voltage-min-seg">--</span> (<span id="acc-voltage-min">--V</span>)
+                    </div>
+                </div>
+
+                <!-- Average Temperature -->
+                <div class="stat-card" style="border-left-color: #f97316;">
+                    <div class="stat-label">Average Temperature</div>
+                    <div class="stat-value text-white" id="acc-temp">--°C</div>
+                    <div class="stat-mini">
+                        Hottest: <span id="acc-temp-max-seg">--</span> (<span id="acc-temp-max">--°C</span>)
+                    </div>
+                </div>
+
+                <!-- Status -->
+                <div class="stat-card" style="border-left-color: #22c55e;">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" id="acc-status">
+                        <span class="text-green-400" id="acc-status-text">OK</span>
+                    </div>
+                    <div class="stat-subtext" id="acc-error-text">No Errors</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Segment Overview -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <h2 class="text-2xl font-bold text-cyan-400 mb-4">Segment Overview (7 Segments)</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4" id="segment-overview-container">
+                <!-- Will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Cell Voltages -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <div class="collapsible-header" onclick="toggleCollapse('voltages')">
+                <h2 class="text-2xl font-bold text-purple-400">Cell Voltages (105 Cells)</h2>
+                <span class="collapse-icon collapsed" id="voltages-icon">▼</span>
+            </div>
+            <div class="collapsible-content collapsed" id="voltages-content">
+                <div class="mt-4" id="cell-voltages-container">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Cell Temperatures -->
+        <div class="glass-card rounded-lg p-6 mb-6">
+            <div class="collapsible-header" onclick="toggleCollapse('temperatures')">
+                <h2 class="text-2xl font-bold text-orange-400">Cell Temperatures (224 Cells)</h2>
+                <span class="collapse-icon collapsed" id="temperatures-icon">▼</span>
+            </div>
+            <div class="collapsible-content collapsed" id="temperatures-content">
+                <div class="mt-4" id="cell-temperatures-container">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="glass-card rounded-lg p-4 text-center">
+            <p class="text-slate-400">NTURT Racing Team - Battery Dashboard v1.0</p>
+        </div>
+    </div>
+
+    <script>
+        // Scroll to top function
+        function scrollToTop() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // Show/hide scroll to top button based on scroll position
+        window.addEventListener('scroll', function() {
+            const scrollBtn = document.getElementById('scrollToTopBtn');
+            if (window.pageYOffset > 300) {
+                scrollBtn.classList.add('visible');
+            } else {
+                scrollBtn.classList.remove('visible');
+            }
+        });
+
+        // Scroll to specific segment
+        function scrollToSegment(type, segmentIndex) {
+            // First expand the section if collapsed
+            const contentId = type === 'voltage' ? 'voltages-content' : 'temperatures-content';
+            const iconId = type === 'voltage' ? 'voltages-icon' : 'temperatures-icon';
+            const content = document.getElementById(contentId);
+            const icon = document.getElementById(iconId);
+            
+            // Expand if collapsed
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                icon.classList.remove('collapsed');
+            }
+            
+            // Wait for expansion animation, then scroll
+            setTimeout(() => {
+                const targetId = type === 'voltage' ? `voltage-segment-${segmentIndex}` : `temp-segment-${segmentIndex}`;
+                const targetElement = document.getElementById(targetId);
+                
+                if (targetElement) {
+                    // Scroll with offset for better visibility
+                    const yOffset = -100; // 100px offset from top
+                    const y = targetElement.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                    
+                    window.scrollTo({
+                        top: y,
+                        behavior: 'smooth'
+                    });
+                    
+                    // Add highlight effect
+                    targetElement.style.transition = 'background-color 0.3s';
+                    targetElement.style.backgroundColor = 'rgba(59, 130, 246, 0.2)';
+                    setTimeout(() => {
+                        targetElement.style.backgroundColor = '';
+                    }, 2000);
+                }
+            }, 300); // Wait for collapse animation
+        }
+
+        // Toggle collapse function
+        function toggleCollapse(section) {
+            const content = document.getElementById(`${section}-content`);
+            const icon = document.getElementById(`${section}-icon`);
+            
+            content.classList.toggle('collapsed');
+            icon.classList.toggle('collapsed');
+        }
+
+        // WebSocket connection
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+        // Connection handlers
+        ws.onopen = () => {
+            console.log('Connected to WebSocket');
+            document.getElementById('connection-status').className = 'connection-indicator connected';
+            document.getElementById('connection-text').textContent = 'Connected';
+            document.querySelector('.status-dot').className = 'status-dot green';
+        };
+
+        ws.onclose = () => {
+            console.log('Disconnected from WebSocket');
+            document.getElementById('connection-status').className = 'connection-indicator disconnected';
+            document.getElementById('connection-text').textContent = 'Disconnected';
+            document.querySelector('.status-dot').className = 'status-dot red';
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                updateDisplay(data);
+            } catch (error) {
+                console.error('Error parsing data:', error);
+            }
+        };
+
+        // Initialize cell displays
+        function initializeCellDisplays() {
+            // Initialize segment overview
+            const segmentOverviewContainer = document.getElementById('segment-overview-container');
+            for (let seg = 0; seg < 7; seg++) {
+                const segmentCard = document.createElement('div');
+                segmentCard.className = 'segment-overview-card';
+                segmentCard.innerHTML = `
+                    <div class="segment-overview-title">Segment ${seg}</div>
+                    <div class="segment-overview-voltage-section" onclick="scrollToSegment('voltage', ${seg})">
+                        <div class="segment-overview-label text-xs">Voltage</div>
+                        <div class="segment-overview-stats">
+                            <div class="segment-overview-stat">
+                                <div class="segment-overview-label">Avg</div>
+                                <div class="segment-overview-value" id="overview-seg${seg}-v-avg">--V</div>
+                            </div>
+                            <div class="segment-overview-stat">
+                                <div class="segment-overview-label">Max</div>
+                                <div class="segment-overview-value" id="overview-seg${seg}-v-max">--V</div>
+                            </div>
+                            <div class="segment-overview-stat">
+                                <div class="segment-overview-label">Min</div>
+                                <div class="segment-overview-value" id="overview-seg${seg}-v-min">--V</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="segment-overview-temp-section" onclick="scrollToSegment('temperature', ${seg})">
+                        <div class="segment-overview-label text-xs">Temperature</div>
+                        <div class="segment-overview-stats">
+                            <div class="segment-overview-stat">
+                                <div class="segment-overview-label">Avg</div>
+                                <div class="segment-overview-value" id="overview-seg${seg}-t-avg">--°C</div>
+                            </div>
+                            <div class="segment-overview-stat">
+                                <div class="segment-overview-label">Max</div>
+                                <div class="segment-overview-value" id="overview-seg${seg}-t-max">--°C</div>
+                            </div>
+                            <div class="segment-overview-stat">
+                                <div class="segment-overview-label">Min</div>
+                                <div class="segment-overview-value" id="overview-seg${seg}-t-min">--°C</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                segmentOverviewContainer.appendChild(segmentCard);
+            }
+
+            // Initialize voltage cells (105 cells, 7 segments of 15 cells each)
+            const voltageContainer = document.getElementById('cell-voltages-container');
+            for (let seg = 0; seg < 7; seg++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'mb-6';
+                segmentDiv.id = `voltage-segment-${seg}`; // Add ID for scroll targeting
+                
+                // Segment header
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'segment-header';
+                headerDiv.innerHTML = `
+                    <span class="text-lg font-bold text-blue-300">Segment ${seg}</span>
+                    <div class="mt-2">
+                        <span class="segment-stat">
+                            <span class="segment-stat-label">Avg:</span>
+                            <span class="segment-stat-value" id="seg${seg}-voltage-avg">--V</span>
+                        </span>
+                        <span class="segment-stat">
+                            <span class="segment-stat-label">Max:</span>
+                            <span class="segment-stat-value" id="seg${seg}-voltage-max">--V</span>
+                        </span>
+                        <span class="segment-stat">
+                            <span class="segment-stat-label">Min:</span>
+                            <span class="segment-stat-value" id="seg${seg}-voltage-min">--V</span>
+                        </span>
+                    </div>
+                `;
+                segmentDiv.appendChild(headerDiv);
+                
+                // Cell grid
+                const cellGrid = document.createElement('div');
+                cellGrid.className = 'grid grid-cols-5 md:grid-cols-10 lg:grid-cols-15 gap-2';
+                for (let i = 0; i < 15; i++) {
+                    const cellIndex = seg * 15 + i;
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'cell-item cell-normal';
+                    cellDiv.id = `cell-v-${cellIndex}`;
+                    cellDiv.innerHTML = `
+                        <div class="cell-label">C${cellIndex}</div>
+                        <div class="cell-value">--</div>
+                    `;
+                    cellGrid.appendChild(cellDiv);
+                }
+                segmentDiv.appendChild(cellGrid);
+                voltageContainer.appendChild(segmentDiv);
+            }
+
+            // Initialize temperature cells (224 cells, 7 segments of 32 cells each)
+            const tempContainer = document.getElementById('cell-temperatures-container');
+            for (let seg = 0; seg < 7; seg++) {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'mb-6';
+                segmentDiv.id = `temp-segment-${seg}`; // Add ID for scroll targeting
+                
+                // Segment header
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'segment-header';
+                headerDiv.innerHTML = `
+                    <span class="text-lg font-bold text-orange-300">Segment ${seg}</span>
+                    <div class="mt-2">
+                        <span class="segment-stat">
+                            <span class="segment-stat-label">Avg:</span>
+                            <span class="segment-stat-value" id="seg${seg}-temp-avg">--°C</span>
+                        </span>
+                        <span class="segment-stat">
+                            <span class="segment-stat-label">Max:</span>
+                            <span class="segment-stat-value" id="seg${seg}-temp-max">--°C</span>
+                        </span>
+                        <span class="segment-stat">
+                            <span class="segment-stat-label">Min:</span>
+                            <span class="segment-stat-value" id="seg${seg}-temp-min">--°C</span>
+                        </span>
+                    </div>
+                `;
+                segmentDiv.appendChild(headerDiv);
+                
+                // Cell grid
+                const cellGrid = document.createElement('div');
+                cellGrid.className = 'grid grid-cols-4 md:grid-cols-8 lg:grid-cols-16 gap-2';
+                for (let i = 0; i < 32; i++) {
+                    const cellIndex = seg * 32 + i;
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'cell-item cell-normal';
+                    cellDiv.id = `cell-t-${cellIndex}`;
+                    cellDiv.innerHTML = `
+                        <div class="cell-label">T${cellIndex}</div>
+                        <div class="cell-value">--</div>
+                    `;
+                    cellGrid.appendChild(cellDiv);
+                }
+                segmentDiv.appendChild(cellGrid);
+                tempContainer.appendChild(segmentDiv);
+            }
+        }
+
+        function updateDisplay(data) {
+            // Update floating message count
+            if (data.message_count !== null && data.message_count !== undefined) {
+                document.getElementById('floating-message-count').textContent = data.message_count;
+            }
+
+            // Update current time
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            document.getElementById('floating-current-time').textContent = timeStr;
+
+            if (!data.accumulator) return;
+
+            const acc = data.accumulator;
+
+            // Update SOC
+            if (acc.soc !== null && acc.soc !== undefined) {
+                document.getElementById('acc-soc').textContent = acc.soc.toFixed(1) + '%';
+            }
+
+            // Process cell voltages from flat array (105 cells, 15 per segment)
+            if (acc.cell_voltages && Array.isArray(acc.cell_voltages)) {
+                let totalVoltage = 0;
+                let validVoltages = 0;
+                let maxSegVoltage = -Infinity;
+                let minSegVoltage = Infinity;
+                let maxSegName = '--';
+                let minSegName = '--';
+
+                // Calculate segment voltages
+                for (let segIdx = 0; segIdx < 7; segIdx++) {
+                    const startIdx = segIdx * 15;
+                    const endIdx = Math.min(startIdx + 15, acc.cell_voltages.length);
+                    let segVoltage = 0;
+                    let segValidCount = 0;
+
+                    for (let i = startIdx; i < endIdx; i++) {
+                        if (acc.cell_voltages[i] !== null && acc.cell_voltages[i] !== undefined) {
+                            segVoltage += acc.cell_voltages[i];
+                            segValidCount++;
+                        }
+                    }
+
+                    if (segValidCount > 0) {
+                        totalVoltage += segVoltage;
+                        validVoltages += segValidCount;
+
+                        if (segVoltage > maxSegVoltage) {
+                            maxSegVoltage = segVoltage;
+                            maxSegName = `Segment ${segIdx}`;
+                        }
+                        if (segVoltage < minSegVoltage) {
+                            minSegVoltage = segVoltage;
+                            minSegName = `Segment ${segIdx}`;
+                        }
+                    }
+                }
+
+                // Update total voltage display
+                if (validVoltages > 0) {
+                    const voltageEl = document.getElementById('acc-voltage');
+                    voltageEl.textContent = totalVoltage.toFixed(2) + 'V';
+                    
+                    // Color code total voltage: white default, yellow >=439, red >=441
+                    if (totalVoltage >= 441) {
+                        voltageEl.className = 'stat-value text-red-400';
+                    } else if (totalVoltage >= 439) {
+                        voltageEl.className = 'stat-value text-yellow-400';
+                    } else {
+                        voltageEl.className = 'stat-value text-white';
+                    }
+                    
+                    document.getElementById('acc-voltage-max-seg').textContent = maxSegName;
+                    
+                    const maxVoltageEl = document.getElementById('acc-voltage-max');
+                    maxVoltageEl.textContent = maxSegVoltage.toFixed(2) + 'V';
+                    // Color code max voltage: white default, yellow >=62.7, red >=63
+                    if (maxSegVoltage >= 63.0) {
+                        maxVoltageEl.style.color = '#ef4444';
+                    } else if (maxSegVoltage >= 62.7) {
+                        maxVoltageEl.style.color = '#eab308';
+                    } else {
+                        maxVoltageEl.style.color = '#ffffff';
+                    }
+                    
+                    document.getElementById('acc-voltage-min-seg').textContent = minSegName;
+                    
+                    const minVoltageEl = document.getElementById('acc-voltage-min');
+                    minVoltageEl.textContent = minSegVoltage.toFixed(2) + 'V';
+                    // Color code min voltage: white default, yellow >=62.7, red >=63
+                    if (minSegVoltage >= 63.0) {
+                        minVoltageEl.style.color = '#ef4444';
+                    } else if (minSegVoltage >= 62.7) {
+                        minVoltageEl.style.color = '#eab308';
+                    } else {
+                        minVoltageEl.style.color = '#ffffff';
+                    }
+                }
+            }
+
+            // Process cell temperatures from flat array (224 cells, 32 per segment)
+            if (acc.cell_temperatures && Array.isArray(acc.cell_temperatures)) {
+                let totalTemp = 0;
+                let validTemps = 0;
+                let maxSegTemp = -Infinity;
+                let maxSegTempName = '--';
+
+                // Calculate segment temperatures
+                for (let segIdx = 0; segIdx < 7; segIdx++) {
+                    const startIdx = segIdx * 32;
+                    const endIdx = Math.min(startIdx + 32, acc.cell_temperatures.length);
+                    let segTempSum = 0;
+                    let segValidCount = 0;
+
+                    for (let i = startIdx; i < endIdx; i++) {
+                        if (acc.cell_temperatures[i] !== null && acc.cell_temperatures[i] !== undefined && acc.cell_temperatures[i] !== -13) {
+                            segTempSum += acc.cell_temperatures[i];
+                            segValidCount++;
+                        }
+                    }
+
+                    if (segValidCount > 0) {
+                        const segAvgTemp = segTempSum / segValidCount;
+                        totalTemp += segTempSum;
+                        validTemps += segValidCount;
+
+                        if (segAvgTemp > maxSegTemp) {
+                            maxSegTemp = segAvgTemp;
+                            maxSegTempName = `Segment ${segIdx}`;
+                        }
+                    }
+                }
+
+                // Update average temperature display
+                if (validTemps > 0) {
+                    const avgTemp = totalTemp / validTemps;
+                    const tempElement = document.getElementById('acc-temp');
+                    tempElement.textContent = avgTemp.toFixed(1) + '°C';
+                    
+                    // Apply temperature color: white default, yellow >=50, red >=70
+                    if (avgTemp >= 70) {
+                        tempElement.className = 'stat-value text-red-400';
+                    } else if (avgTemp >= 50) {
+                        tempElement.className = 'stat-value text-yellow-400';
+                    } else {
+                        tempElement.className = 'stat-value text-white';
+                    }
+
+                    document.getElementById('acc-temp-max-seg').textContent = maxSegTempName;
+                    
+                    const maxTempEl = document.getElementById('acc-temp-max');
+                    if (maxSegTemp !== -Infinity) {
+                        maxTempEl.textContent = maxSegTemp.toFixed(1) + '°C';
+                        // Color code max temperature: white default, yellow >=50, red >=70
+                        if (maxSegTemp >= 70) {
+                            maxTempEl.style.color = '#ef4444';
+                        } else if (maxSegTemp >= 50) {
+                            maxTempEl.style.color = '#eab308';
+                        } else {
+                            maxTempEl.style.color = '#ffffff';
+                        }
+                    }
+                }
+            }
+
+            // Update status
+            let hasError = false;
+            let errorMessage = 'No Errors';
+
+            if (acc.status !== null && acc.status !== undefined && acc.status !== 1) {
+                hasError = true;
+                errorMessage = `Status: ${acc.status}`;
+            }
+
+            const statusText = document.getElementById('acc-status-text');
+            if (hasError) {
+                statusText.textContent = 'ERROR';
+                statusText.className = 'text-red-400';
+            } else {
+                statusText.textContent = 'OK';
+                statusText.className = 'text-green-400';
+            }
+            document.getElementById('acc-error-text').textContent = errorMessage;
+
+            // Update cell voltages from flat array (105 cells, 15 per segment)
+            if (acc.cell_voltages && Array.isArray(acc.cell_voltages)) {
+                for (let segIdx = 0; segIdx < 7; segIdx++) {
+                    const startIdx = segIdx * 15;
+                    const endIdx = Math.min(startIdx + 15, acc.cell_voltages.length);
+                    
+                    // Collect voltages for this segment
+                    // Collect voltages for this segment
+                    const voltages = [];
+                    for (let i = startIdx; i < endIdx; i++) {
+                        if (acc.cell_voltages[i] !== null && acc.cell_voltages[i] !== undefined) {
+                            voltages.push(acc.cell_voltages[i]);
+                        }
+                    }
+
+                    if (voltages.length > 0) {
+                        const avgVoltage = voltages.reduce((a, b) => a + b, 0) / voltages.length;
+                        const maxVoltage = Math.max(...voltages);
+                        const minVoltage = Math.min(...voltages);
+
+                        // Update segment overview
+                        const overviewAvgEl = document.getElementById(`overview-seg${segIdx}-v-avg`);
+                        if (overviewAvgEl) {
+                            overviewAvgEl.textContent = avgVoltage.toFixed(3) + 'V';
+                            // Color coding: white default, yellow >=4.18, red >=4.2
+                            if (avgVoltage >= 4.2) {
+                                overviewAvgEl.style.color = '#ef4444';
+                            } else if (avgVoltage >= 4.18) {
+                                overviewAvgEl.style.color = '#eab308';
+                            } else {
+                                overviewAvgEl.style.color = '#ffffff';
+                            }
+                        }
+                        
+                        const overviewMaxEl = document.getElementById(`overview-seg${segIdx}-v-max`);
+                        if (overviewMaxEl) {
+                            overviewMaxEl.textContent = maxVoltage.toFixed(3) + 'V';
+                            if (maxVoltage >= 4.2) {
+                                overviewMaxEl.style.color = '#ef4444';
+                            } else if (maxVoltage >= 4.18) {
+                                overviewMaxEl.style.color = '#eab308';
+                            } else {
+                                overviewMaxEl.style.color = '#ffffff';
+                            }
+                        }
+                        
+                        const overviewMinEl = document.getElementById(`overview-seg${segIdx}-v-min`);
+                        if (overviewMinEl) {
+                            overviewMinEl.textContent = minVoltage.toFixed(3) + 'V';
+                            if (minVoltage >= 4.2) {
+                                overviewMinEl.style.color = '#ef4444';
+                            } else if (minVoltage >= 4.18) {
+                                overviewMinEl.style.color = '#eab308';
+                            } else {
+                                overviewMinEl.style.color = '#ffffff';
+                            }
+                        }
+
+                        // Update segment header
+                        const avgEl = document.getElementById(`seg${segIdx}-voltage-avg`);
+                        if (avgEl) {
+                            avgEl.textContent = avgVoltage.toFixed(3) + 'V';
+                            // Color code segment average
+                            if (avgVoltage >= 4.2) {
+                                avgEl.className = 'segment-stat-value text-red-400';
+                            } else if (avgVoltage >= 4.18) {
+                                avgEl.className = 'segment-stat-value text-yellow-400';
+                            } else {
+                                avgEl.className = 'segment-stat-value text-white';
+                            }
+                        }
+
+                        const maxEl = document.getElementById(`seg${segIdx}-voltage-max`);
+                        if (maxEl) {
+                            maxEl.textContent = maxVoltage.toFixed(3) + 'V';
+                            if (maxVoltage >= 4.2) {
+                                maxEl.className = 'segment-stat-value text-red-400';
+                            } else if (maxVoltage >= 4.18) {
+                                maxEl.className = 'segment-stat-value text-yellow-400';
+                            } else {
+                                maxEl.className = 'segment-stat-value text-white';
+                            }
+                        }
+
+                        const minEl = document.getElementById(`seg${segIdx}-voltage-min`);
+                        if (minEl) {
+                            minEl.textContent = minVoltage.toFixed(3) + 'V';
+                            if (minVoltage >= 4.2) {
+                                minEl.className = 'segment-stat-value text-red-400';
+                            } else if (minVoltage >= 4.18) {
+                                minEl.className = 'segment-stat-value text-yellow-400';
+                            } else {
+                                minEl.className = 'segment-stat-value text-white';
+                            }
+                        }
+                    }
+
+                    // Update individual cells
+                    for (let i = startIdx; i < endIdx; i++) {
+                        const cellIndex = i;
+                        const voltage = acc.cell_voltages[i];
+                        const cellEl = document.getElementById(`cell-v-${cellIndex}`);
+                        if (cellEl && voltage !== null && voltage !== undefined) {
+                            const valueEl = cellEl.querySelector('.cell-value');
+                            valueEl.textContent = voltage.toFixed(3) + 'V';
+
+                            // Color code cell: white default, yellow >=4.18, red >=4.2
+                            if (voltage >= 4.2) {
+                                cellEl.className = 'cell-item cell-danger';
+                                valueEl.className = 'cell-value text-red-400';
+                            } else if (voltage >= 4.18) {
+                                cellEl.className = 'cell-item cell-warning';
+                                valueEl.className = 'cell-value text-yellow-400';
+                            } else {
+                                cellEl.className = 'cell-item cell-normal';
+                                valueEl.className = 'cell-value text-white';
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Update cell temperatures from flat array (224 cells, 32 per segment)
+            if (acc.cell_temperatures && Array.isArray(acc.cell_temperatures)) {
+                for (let segIdx = 0; segIdx < 7; segIdx++) {
+                    const startIdx = segIdx * 32;
+                    const endIdx = Math.min(startIdx + 32, acc.cell_temperatures.length);
+                    
+                    // Collect temperatures for this segment
+                    const temps = [];
+                    for (let i = startIdx; i < endIdx; i++) {
+                        if (acc.cell_temperatures[i] !== null && acc.cell_temperatures[i] !== undefined && acc.cell_temperatures[i] !== -13) {
+                            temps.push(acc.cell_temperatures[i]);
+                        }
+                    }
+
+                    if (temps.length > 0) {
+                        const avgTemp = temps.reduce((a, b) => a + b, 0) / temps.length;
+                        const maxTemp = Math.max(...temps);
+                        const minTemp = Math.min(...temps);
+
+                        // Update segment overview
+                        const overviewAvgEl = document.getElementById(`overview-seg${segIdx}-t-avg`);
+                        if (overviewAvgEl) {
+                            overviewAvgEl.textContent = avgTemp.toFixed(1) + '°C';
+                            // Color coding: white default, yellow >=50, red >=70
+                            if (avgTemp >= 70) {
+                                overviewAvgEl.style.color = '#ef4444';
+                            } else if (avgTemp >= 50) {
+                                overviewAvgEl.style.color = '#eab308';
+                            } else {
+                                overviewAvgEl.style.color = '#ffffff';
+                            }
+                        }
+                        
+                        const overviewMaxEl = document.getElementById(`overview-seg${segIdx}-t-max`);
+                        if (overviewMaxEl) {
+                            overviewMaxEl.textContent = maxTemp.toFixed(1) + '°C';
+                            if (maxTemp >= 70) {
+                                overviewMaxEl.style.color = '#ef4444';
+                            } else if (maxTemp >= 50) {
+                                overviewMaxEl.style.color = '#eab308';
+                            } else {
+                                overviewMaxEl.style.color = '#ffffff';
+                            }
+                        }
+                        
+                        const overviewMinEl = document.getElementById(`overview-seg${segIdx}-t-min`);
+                        if (overviewMinEl) {
+                            overviewMinEl.textContent = minTemp.toFixed(1) + '°C';
+                            if (minTemp >= 70) {
+                                overviewMinEl.style.color = '#ef4444';
+                            } else if (minTemp >= 50) {
+                                overviewMinEl.style.color = '#eab308';
+                            } else {
+                                overviewMinEl.style.color = '#ffffff';
+                            }
+                        }
+
+                        // Update segment header
+                        const avgEl = document.getElementById(`seg${segIdx}-temp-avg`);
+                        if (avgEl) {
+                            avgEl.textContent = avgTemp.toFixed(1) + '°C';
+                            // Color code average: white default, yellow >=50, red >=70
+                            if (avgTemp >= 70) {
+                                avgEl.className = 'segment-stat-value text-red-400';
+                            } else if (avgTemp >= 50) {
+                                avgEl.className = 'segment-stat-value text-yellow-400';
+                            } else {
+                                avgEl.className = 'segment-stat-value text-white';
+                            }
+                        }
+
+                        const maxEl = document.getElementById(`seg${segIdx}-temp-max`);
+                        if (maxEl) {
+                            maxEl.textContent = maxTemp.toFixed(1) + '°C';
+                            // Color code max: white default, yellow >=50, red >=70
+                            if (maxTemp >= 70) {
+                                maxEl.className = 'segment-stat-value text-red-400';
+                            } else if (maxTemp >= 50) {
+                                maxEl.className = 'segment-stat-value text-yellow-400';
+                            } else {
+                                maxEl.className = 'segment-stat-value text-white';
+                            }
+                        }
+
+                        const minEl = document.getElementById(`seg${segIdx}-temp-min`);
+                        if (minEl) {
+                            minEl.textContent = minTemp.toFixed(1) + '°C';
+                            // Color code min: white default, yellow >=50, red >=70
+                            if (minTemp >= 70) {
+                                minEl.className = 'segment-stat-value text-red-400';
+                            } else if (minTemp >= 50) {
+                                minEl.className = 'segment-stat-value text-yellow-400';
+                            } else {
+                                minEl.className = 'segment-stat-value text-white';
+                            }
+                        }
+                    }
+
+                    // Update individual cells
+                    for (let i = startIdx; i < endIdx; i++) {
+                        const cellIndex = i;
+                        const temp = acc.cell_temperatures[i];
+                        const cellEl = document.getElementById(`cell-t-${cellIndex}`);
+                        if (cellEl && temp !== null && temp !== undefined) {
+                            const valueEl = cellEl.querySelector('.cell-value');
+                            valueEl.textContent = temp.toFixed(1) + '°C';
+
+                            // Color code cell: white default, yellow >=50, red >=70
+                            if (temp >= 70) {
+                                cellEl.className = 'cell-item cell-danger';
+                                valueEl.className = 'cell-value text-red-400';
+                            } else if (temp >= 50) {
+                                cellEl.className = 'cell-item cell-warning';
+                                valueEl.className = 'cell-value text-yellow-400';
+                            } else {
+                                cellEl.className = 'cell-item cell-normal';
+                                valueEl.className = 'cell-value text-white';
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            initializeCellDisplays();
+        });
+    </script>
+</body>
+</html>

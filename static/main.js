@@ -12,15 +12,6 @@ class NTURTDashboard {
         this.rpmHistory = [];
         this.maxHistoryPoints = 100;
         
-        // Inverter error tracking
-        this.inverterErrorStates = {
-            1: { hasError: false, lastErrorTime: null },
-            2: { hasError: false, lastErrorTime: null },
-            3: { hasError: false, lastErrorTime: null },
-            4: { hasError: false, lastErrorTime: null }
-        };
-        this.errorAnnotationCounter = 0;
-        
         // Chart instances
         this.torqueChart = null;
         this.rpmChart = null;
@@ -302,6 +293,16 @@ class NTURTDashboard {
         }
     }
 
+    updateTripDistance(distance) {
+        const distanceElement = document.getElementById('trip-distance-value');
+        if (distance && distance.trip_distance_km !== null && distance.trip_distance_km !== undefined) {
+            const distanceKm = parseFloat(distance.trip_distance_km);
+            distanceElement.textContent = distanceKm.toFixed(2) + ' km';
+        } else {
+            distanceElement.textContent = '0.00 km';
+        }
+    }
+
     updateSpeedGauge(velocity, inverters) {
         let speed = 0;
         let totalRPM = 0;
@@ -409,21 +410,6 @@ class NTURTDashboard {
                 if (statusContainer && data.status !== null) {
                     const statusInfo = this.formatInverterStatus(data.status);
                     statusContainer.innerHTML = this.generateStatusHTML(statusInfo);
-                    
-                    // Check for errors and add markers to torque chart - DISABLED
-                    // const hasError = statusInfo.errorCode !== 0x0000 || statusInfo.fault;
-                    // const invNumInt = parseInt(invNum);
-                    // const previousErrorState = this.inverterErrorStates[invNumInt].hasError;
-                    
-                    // If error state changed from no error to error, add a marker
-                    // if (hasError && !previousErrorState) {
-                    //     this.addErrorMarkerToTorqueChart(invNumInt, statusInfo.errorText, statusInfo.errorCode);
-                    //     this.inverterErrorStates[invNumInt].hasError = true;
-                    //     this.inverterErrorStates[invNumInt].lastErrorTime = new Date();
-                    // } else if (!hasError && previousErrorState) {
-                    //     // Error cleared
-                    //     this.inverterErrorStates[invNumInt].hasError = false;
-                    // }
                 }
                 
                 // Update other fields
@@ -556,9 +542,6 @@ class NTURTDashboard {
                     plugins: {
                         legend: {
                             labels: { color: '#e2e8f0' }
-                        },
-                        annotation: {
-                            annotations: {}
                         }
                     },
                     scales: {
@@ -1485,70 +1468,6 @@ class NTURTDashboard {
             groups.push(count > 0 ? sum / count : 0);
         }
         return groups;
-    }
-
-    addErrorMarkerToTorqueChart(invNum, errorText, errorCode) {
-        if (!this.torqueChart) return;
-        
-        const invNames = { 1: 'FL', 2: 'FR', 3: 'RL', 4: 'RR' };
-        // 使用不同於曲線的顏色：紫色、粉色、青色、品紅色
-        const invColors = { 1: '#8b5cf6', 2: '#ec4899', 3: '#06b6d4', 4: '#d946ef' };
-        
-        // Get current time label (the last label in the chart)
-        const currentLabel = this.torqueChart.data.labels[this.torqueChart.data.labels.length - 1];
-        if (!currentLabel) return;
-        
-        // Create unique annotation ID
-        const annotationId = `error_${invNum}_${this.errorAnnotationCounter++}`;
-        
-        // Add annotation to the chart
-        const annotations = this.torqueChart.options.plugins.annotation.annotations;
-        annotations[annotationId] = {
-            type: 'box',
-            xMin: currentLabel,
-            xMax: currentLabel,
-            borderColor: invColors[invNum] || '#d946ef',
-            borderWidth: 3,
-            borderDash: [8, 4],
-            backgroundColor: 'transparent',
-            label: {
-                display: true,
-                content: `${invNames[invNum]} ERR`,
-                position: 'start',
-                backgroundColor: invColors[invNum] || '#d946ef',
-                color: '#ffffff',
-                font: {
-                    size: 10,
-                    weight: 'bold'
-                },
-                padding: 4,
-                rotation: 0
-            }
-        };
-        
-        // Update chart to show the new annotation
-        this.torqueChart.update('none');
-        
-        console.log(`Added error marker for Inverter ${invNames[invNum]}: ${errorText} (0x${errorCode.toString(16).padStart(4, '0')})`);
-    }
-
-    cleanupOldErrorAnnotations() {
-        if (!this.torqueChart) return;
-        
-        const annotations = this.torqueChart.options.plugins.annotation.annotations;
-        const validLabels = this.torqueChart.data.labels;
-        
-        // Find and remove annotations that reference time labels no longer in the chart
-        Object.keys(annotations).forEach(key => {
-            if (key.startsWith('error_')) {
-                const annotation = annotations[key];
-                // If the annotation's xMin is not in the current labels, remove it
-                if (!validLabels.includes(annotation.xMin)) {
-                    delete annotations[key];
-                    console.log(`Removed old error annotation: ${key}`);
-                }
-            }
-        });
     }
 
     formatInverterStatus(status) {
