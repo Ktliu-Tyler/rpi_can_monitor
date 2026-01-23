@@ -1,0 +1,368 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+BU_: VCU INV4 INV3 RPI ACC_BMS RTK Simulator IMU IMU_RPI 
+BO_ 404 Status1: 6 INV4
+   SG_ INV_STATUS : 1|3@1+ (1,0) [0|4] "" VCU
+   SG_ STATUS_HV : 4|1@0+ (1,0) [0|1] "" VCU
+   SG_ TorqueFeedback : 16|16@1- (0.025,0) [-30000|30000] "Nm" VCU
+   SG_ Speed : 32|16@1- (1,0) [0|30000] "RPM" Vector__XXX
+
+BO_ 660 Status2: 4 INV4
+   SG_ DCvolt : 0|16@1+ (0.01,0) [0|1] "V" VCU
+   SG_ DCcurrent : 16|16@1- (0.01,0) [0|1] "A" VCU
+
+BO_ 916 Temperature: 6 INV4
+   SG_ InvMOStemp : 0|16@1- (0.1,0) [0|1] "C" VCU
+   SG_ MCUtemp : 16|16@1- (0.1,0) [0|1] "C" VCU
+   SG_ MOTORtemp : 32|16@1- (0.1,0) [0|1] "C" VCU
+
+BO_ 403 Status1: 6 INV3
+   SG_ INV_STATUS : 1|3@1+ (1,0) [0|4] "" Vector__XXX
+   SG_ STATUS_HV : 4|1@0+ (1,0) [0|1] "" VCU
+   SG_ TorqueFeedback : 16|16@1- (0.025,0) [-30000|30000] "Nm" VCU
+   SG_ Speed : 32|16@1- (1,0) [0|30000] "RPM" Vector__XXX
+
+BO_ 659 Status2: 4 INV3
+   SG_ DCvolt : 0|16@1+ (0.01,0) [0|1] "V" VCU
+   SG_ DCcurrent : 16|16@1- (0.01,0) [0|1] "A" VCU
+
+BO_ 915 Temperature: 6 INV3
+   SG_ InvMOStemp : 0|16@1- (0.1,0) [0|1] "C" VCU
+   SG_ MCUtemp : 16|16@1- (0.1,0) [0|1] "C" VCU
+   SG_ MOTORtemp : 32|16@1- (0.1,0) [0|1] "C" VCU
+
+BO_ 532 INVCMD4: 4 VCU
+   SG_ CTRL_ENABLE : 3|1@0+ (1,0) [0|1] "" INV4
+   SG_ CTRL_FAULT_RESET : 5|1@0+ (1,0) [0|1] "" INV4
+   SG_ CTRL_TRQ_CMD : 16|16@1- (0.02,0) [0|1] "Nm" INV4
+
+BO_ 531 INVCMD3: 4 VCU
+   SG_ CTRL_ENABLE : 3|1@0+ (1,0) [0|1] "" INV3
+   SG_ CTRL_FAULT_RESET : 5|1@0+ (1,0) [0|1] "" INV3
+   SG_ CTRL_TRQ_CMD : 16|16@1- (0.02,0) [0|1] "Nm" INV3
+
+BO_ 256 TIMESTAMP: 6 RPI
+   SG_ MillisecondsSinceMidnight : 0|32@1+ (1,0) [0|4.29497e+09] "" Vector__XXX
+   SG_ DaysSince1984 : 32|16@1+ (1,0) [0|65535] "" Vector__XXX
+
+BO_ 1555 TI_Log: 8 INV3
+   SG_ currentU : 0|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ currentV : 16|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ currentW : 32|16@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ Pos : 48|16@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 512 CTRL_TWEEK: 5 RPI
+   SG_ CTRL_TWEEK_SELECT : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ CTRL_TWEEK_VALUE : 8|32@5- (1,0) [0|1] "" Vector__XXX
+
+BO_ 400 Cell_Voltage: 8 ACC_BMS
+   SG_ Index_N M : 0|8@1+ (1,0) [0|8] "" RPI
+   SG_ Cell_voltage1 m0 : 8|8@1+ (0.02,0) [0|5] "V" RPI
+   SG_ Cell_voltage2 m0 : 16|8@1+ (0.02,0) [0|5] "V" RPI
+   SG_ Cell_voltage3 m0 : 24|8@1+ (0.02,0) [0|5] "V" RPI
+   SG_ Cell_voltage4 m0 : 32|8@1+ (0.02,0) [0|5] "V" RPI
+   SG_ Cell_voltage5 m0 : 40|8@1+ (0.02,0) [0|5] "V" RPI
+   SG_ Cell_voltage6 m0 : 48|8@1+ (0.02,0) [0|5] "V" RPI
+   SG_ Cell_voltage7 m0 : 56|8@1+ (0.02,0) [0|5] "V" RPI
+
+BO_ 912 Temperature: 8 ACC_BMS
+   SG_ Index_M : 0|8@1+ (1,0) [0|1] "deg_C" RPI
+   SG_ temperature1 : 8|8@1+ (0.125,0) [0|100] "deg_C" RPI
+   SG_ temperature2 : 16|8@1+ (0.125,0) [0|100] "deg_C" RPI
+
+BO_ 1808 Heartbeat: 8 ACC_BMS
+   SG_ HeartbeatSig : 0|8@1+ (1,0) [0|1] "" ACC_BMS
+
+BO_ 656 Status: 8 ACC_BMS
+   SG_ voltage : 24|24@1+ (0.00097656,0) [0|600] "V" ACC_BMS
+   SG_ Status : 0|8@1+ (1,0) [0|1] "" ACC_BMS
+   SG_ Temp : 8|16@1+ (0.125,0) [0|100] "deg_C" ACC_BMS
+
+BO_ 1168 state: 8 ACC_BMS
+   SG_ SOC : 0|8@1+ (1,0) [0|100] "%" RPI
+   SG_ Current : 8|16@1+ (0.01,0) [0|200] "A" RPI
+   SG_ Capacity : 24|16@1+ (0.01,0) [0|200] "Ah" RPI
+
+BO_ 641 States: 1 VCU
+   SG_ States : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 385 Cockpit: 8 VCU
+   SG_ Steer : 0|16@1- (0.01,0) [0|1] "deg" RPI
+   SG_ Accel : 16|8@1+ (1,0) [0|1] "%" RPI
+   SG_ APPS1 : 24|8@1- (1,0) [0|1] "%" RPI
+   SG_ APPS2 : 32|8@1- (1,0) [0|1] "%" RPI
+   SG_ Brake : 40|8@1+ (1,0) [0|1] "%" RPI
+   SG_ BSE1 : 48|8@1+ (1,0) [0|1] "bar" RPI
+   SG_ BSE2 : 56|8@1+ (1,0) [0|1] "bar" RPI
+
+BO_ 1793 Heartbeat: 1 VCU
+
+BO_ 386 Cockpit: 4 Simulator
+   SG_ Steer : 0|16@1- (1,0) [0|1] "e-2_deg" VCU
+   SG_ Accel : 16|8@1- (1,0) [0|1] "%" VCU
+   SG_ Brake : 24|8@1- (1,0) [0|1] "%" VCU
+
+BO_ 898 Enable: 2 Simulator
+   SG_ E_Stop : 0|1@1+ (1,0) [0|1] "" VCU
+   SG_ RTD : 8|1@1+ (1,0) [0|1] "" VCU
+
+BO_ 642 Wheel_Speed: 8 Simulator
+   SG_ FL : 0|16@1+ (1,0) [0|1] "rpm" VCU
+   SG_ FR : 16|16@1+ (1,0) [0|1] "rpm" VCU
+   SG_ RL : 32|16@1+ (1,0) [0|1] "rpm" VCU
+   SG_ RR : 48|16@1+ (1,0) [0|1] "rpm" VCU
+
+BO_ 1794 Heartbeat: 1 Simulator
+   SG_ HeartbeatSig : 0|8@1+ (1,0) [0|1] "" VCU
+
+BO_ 392 Acceleration: 6 IMU
+   SG_ a_x : 0|16@1- (0.001,0) [0|1] "G" VCU
+   SG_ a_y : 16|16@1- (0.001,0) [0|1] "G" VCU
+   SG_ a_z : 32|16@1- (0.001,0) [0|1] "G" VCU
+
+BO_ 648 Gyration: 6 IMU
+   SG_ g_x : 0|16@1- (0.1,0) [0|1] "deg/s" VCU
+   SG_ g_y : 16|16@1- (0.1,0) [0|1] "deg/s" VCU
+   SG_ g_z : 32|16@1- (0.1,0) [0|1] "deg/s" VCU
+
+BO_ 904 Euler_Angle: 6 IMU
+   SG_ R : 0|16@1- (1,0) [0|1] "deg" VCU
+   SG_ P : 16|16@1- (1,0) [0|1] "deg" VCU
+   SG_ Y : 32|16@1- (1,0) [0|1] "deg" VCU
+
+BO_ 1024 RTK_Basic: 8 RTK
+   SG_ Latitude : 0|32@1- (1e-07,0) [0|1] "N" Vector__XXX
+   SG_ Logitude : 32|32@1- (1e-07,0) [0|1] "E" RTK
+
+BO_ 1025 RTK_Extended: 4 RTK
+   SG_ Altitude : 0|16@1- (1,0) [0|1] "m" VCU
+   SG_ Status : 16|8@1- (1,0) [0|1] "m" VCU
+
+BO_ 1026 RTK_Vx: 4 RTK
+   SG_ Vx : 0|32@1- (1,0) [0|1] "" VCU
+
+BO_ 1028 RTK_Vz: 4 RTK
+   SG_ Vz : 0|32@1- (1,0) [0|1] "" VCU
+
+BO_ 1027 RTK_Vy: 4 RTK
+   SG_ Vy : 0|32@1- (1,0) [0|1] "" VCU
+
+BO_ 1029 RTK_Gx: 4 RTK
+   SG_ Gx : 0|32@1- (1,0) [0|1] "" VCU
+
+BO_ 1030 RTK_Gy: 4 RTK
+   SG_ Gy : 0|32@1- (1,0) [0|1] "" Vector__XXX
+
+BO_ 1031 RTK_Gz: 4 RTK
+   SG_ Gz : 0|32@1- (1,0) [0|1] "" VCU
+
+BO_ 1032 RTK_Mag: 4 RTK
+   SG_ Velocity : 0|32@1- (1,0) [0|1] "mm/s" VCU
+
+BO_ 1061 acc_lsm06: 8 IMU_RPI
+   SG_ a_x : 0|16@1- (0.001,0) [0|1] "m/s^2" IMU_RPI
+   SG_ a_y : 16|16@1- (0.001,0) [0|1] "m/s^2" IMU_RPI
+   SG_ a_z : 32|16@1- (0.001,0) [0|1] "m/s^2" IMU_RPI
+
+BO_ 1062 acc_lsm303: 8 IMU_RPI
+   SG_ a_x : 0|16@1- (0.001,0) [0|1] "m/s^2" IMU_RPI
+   SG_ a_y : 16|16@1- (0.001,0) [0|1] "m/s^2" IMU_RPI
+   SG_ a_z : 32|16@1- (0.001,0) [0|1] "m/s^2" Vector__XXX
+
+BO_ 1063 gyro: 8 IMU_RPI
+   SG_ g_x : 0|16@1- (0.1,0) [0|1] "deg/s" Vector__XXX
+   SG_ g_y : 16|16@1- (0.1,0) [0|1] "deg/s" Vector__XXX
+   SG_ g_z : 32|16@1- (0.1,0) [0|1] "deg/s" Vector__XXX
+
+BO_ 1064 euler: 8 IMU_RPI
+   SG_ Roll : 0|16@1- (0.01,0) [0|1] "。" Vector__XXX
+   SG_ Pitch : 16|16@1- (0.01,0) [0|1] "。" Vector__XXX
+   SG_ Yaw : 32|16@1- (0.01,0) [0|1] "。" Vector__XXX
+
+BO_ 1065 mag: 8 IMU_RPI
+   SG_ m_x : 0|16@1- (1,0) [0|1] "uT" Vector__XXX
+   SG_ m_y : 16|16@1- (1,0) [0|1] "uT" Vector__XXX
+   SG_ m_z : 32|16@1- (1,0) [0|1] "uT" Vector__XXX
+
+BO_ 897 SUSP_sensors: 8 VCU
+   SG_ SUSP_F : 0|16@1- (0.1,0) [0|100] "mm" Vector__XXX
+   SG_ SUSP_R : 16|16@1- (0.1,0) [0|100] "mm" Vector__XXX
+
+BO_ 1160 Quaterneon: 8 IMU
+   SG_ q_w : 0|16@1- (0.0001,0) [0|1] "" VCU
+   SG_ q_x : 16|16@1- (0.0001,0) [0|1] "" VCU
+   SG_ q_y : 32|16@1- (0.0001,0) [0|1] "" VCU
+   SG_ q_z : 48|16@1- (0.0001,0) [0|1] "" VCU
+
+BO_ 1811 Heartbeat: 1 INV3
+   SG_ HeartbeatSig : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 1812 Heartbeat: 1 INV4
+   SG_ HeartbeatSig : 0|8@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 1843 PID_Feedback: 1 INV3
+
+BO_ 1844 PID_Feedback: 1 INV4
+
+CM_ BU_ VCU "Vehicle controll unit";
+CM_ BU_ INV4 "inverter RR";
+CM_ BU_ INV3 "inverter RL";
+CM_ BU_ ACC_BMS "accumulator BMS";
+CM_ BO_ 404 "10 ms";
+CM_ BO_ 660 "100 ms";
+CM_ BO_ 916 "100 ms";
+CM_ BO_ 403 "10 ms";
+CM_ BO_ 659 "100 ms";
+CM_ BO_ 915 "100 ms";
+CM_ BO_ 532 "10 ms";
+CM_ BO_ 531 "10 ms";
+CM_ BO_ 400 "1000 ms";
+CM_ BO_ 912 "1000 ms";
+CM_ BO_ 1808 "100 ms";
+CM_ BO_ 656 "200 ms";
+CM_ BO_ 1168 "200 ms";
+CM_ BO_ 641 "100 ms";
+CM_ BO_ 385 "10 ms";
+CM_ BO_ 1793 "100 ms";
+CM_ BO_ 386 "10 ms";
+CM_ BO_ 642 "10 ms";
+CM_ BO_ 1794 "100 ms";
+CM_ BO_ 392 "10 ms";
+CM_ BO_ 648 "10 ms";
+CM_ BO_ 904 "10 ms";
+CM_ BO_ 1160 "10 ms";
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_ BO_ "matchingcriteria" INT 0 0;
+BA_DEF_ BO_ "filterlabeling" INT 0 0;
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#ffffff";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#1a1a1a";
+BA_DEF_DEF_ "matchingcriteria" 0;
+BA_DEF_DEF_ "filterlabeling" 1;
+BA_DEF_DEF_ "matchingcriteria" 0;
+BA_DEF_DEF_ "filterlabeling" 1;
+BA_ "GenMsgForegroundColor" BO_ 404 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 404 "#ffff7f";
+BA_ "GenMsgForegroundColor" BO_ 660 "#550000";
+BA_ "GenMsgBackgroundColor" BO_ 660 "#aaffff";
+BA_ "GenMsgForegroundColor" BO_ 916 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 916 "#ffaaff";
+BA_ "GenMsgForegroundColor" BO_ 403 "#174600";
+BA_ "GenMsgBackgroundColor" BO_ 403 "#ffff7f";
+BA_ "GenMsgForegroundColor" BO_ 659 "#550000";
+BA_ "GenMsgBackgroundColor" BO_ 659 "#aaffff";
+BA_ "GenMsgForegroundColor" BO_ 915 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 915 "#ffaaff";
+BA_ "GenMsgForegroundColor" BO_ 532 "#00007f";
+BA_ "GenMsgBackgroundColor" BO_ 532 "#aaff7f";
+BA_ "GenMsgForegroundColor" BO_ 531 "#00007f";
+BA_ "GenMsgBackgroundColor" BO_ 531 "#aaff7f";
+BA_ "GenMsgForegroundColor" BO_ 1555 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 512 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 512 "#aaaaff";
+BA_ "GenMsgForegroundColor" BO_ 400 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 912 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 1168 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 386 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 898 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 642 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 392 "#5500ff";
+BA_ "GenMsgForegroundColor" BO_ 392 "#ffffff";
+BA_ "GenMsgForegroundColor" BO_ 648 "#ffffff";
+BA_ "GenMsgBackgroundColor" BO_ 648 "#5500ff";
+BA_ "GenMsgBackgroundColor" BO_ 904 "#5500ff";
+BA_ "GenMsgForegroundColor" BO_ 904 "#ffffff";
+BA_ "GenMsgBackgroundColor" BO_ 1024 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1025 "#55aa7f";
+BA_ "GenMsgForegroundColor" BO_ 1026 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 1026 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1028 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1027 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1029 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1030 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1031 "#55aa7f";
+BA_ "GenMsgBackgroundColor" BO_ 1032 "#55aa7f";
+BA_ "GenMsgForegroundColor" BO_ 1061 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 1061 "#55aaff";
+BA_ "GenMsgForegroundColor" BO_ 1062 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 1062 "#55aaff";
+BA_ "GenMsgForegroundColor" BO_ 1063 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 1063 "#55aaff";
+BA_ "GenMsgBackgroundColor" BO_ 1064 "#55aaff";
+BA_ "GenMsgForegroundColor" BO_ 1065 "#000000";
+BA_ "GenMsgBackgroundColor" BO_ 1065 "#55aaff";
+BA_ "GenMsgForegroundColor" BO_ 897 "#000000";
+BA_ "GenMsgForegroundColor" BO_ 1160 "#ffffff";
+BA_ "GenMsgBackgroundColor" BO_ 1160 "#5500ff";
+BA_ "GenMsgForegroundColor" BO_ 1843 "#000000";
+VAL_ 404 INV_STATUS 1 "STATUS_READY" 2 "STATUS_ENABLED" 4 "STATUS_FAULT";
+VAL_ 403 INV_STATUS 1 "STATUS_READY" 2 "STATUS_ENABLED" 4 "STATUS_FAULT";
+VAL_ 512 CTRL_TWEEK_SELECT 1 "PQ" 2 "IQ" 17 "PD" 18 "ID";
+VAL_ 656 Status 0 "Bad" 1 "OK";
+VAL_ 641 States 1 "No Description" 2 "No Description" 4 "No Description" 8 "No Description" 16 "No Description" 32 "No Description" 64 "No Description" 128 "No Description";

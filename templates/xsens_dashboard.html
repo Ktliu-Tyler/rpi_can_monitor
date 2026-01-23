@@ -1,0 +1,1450 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xsens IMU & GPS Monitor - NTUR</title>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        
+        .flex {
+            display: flex;
+        }
+        
+        .items-center {
+            align-items: center;
+        }
+        
+        .justify-between {
+            justify-content: space-between;
+        }
+        
+        .grid {
+            display: grid;
+        }
+        
+        .grid-cols-1 {
+            grid-template-columns: repeat(1, minmax(0, 1fr));
+        }
+        
+        .grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        
+        .grid-cols-3 {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        
+        .grid-cols-4 {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        
+        .gap-2 {
+            gap: 0.5rem;
+        }
+        
+        .gap-3 {
+            gap: 0.75rem;
+        }
+        
+        .gap-6 {
+            gap: 1.5rem;
+        }
+        
+        .space-y-2 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .space-y-6 > * + * {
+            margin-top: 1.5rem;
+        }
+        
+        .text-sm {
+            font-size: 0.875rem;
+        }
+        
+        .text-lg {
+            font-size: 1.125rem;
+        }
+        
+        .text-xl {
+            font-size: 1.25rem;
+        }
+        
+        .text-2xl {
+            font-size: 1.5rem;
+        }
+        
+        .text-3xl {
+            font-size: 1.875rem;
+        }
+        
+        .text-4xl {
+            font-size: 2.25rem;
+        }
+        
+        .font-bold {
+            font-weight: bold;
+        }
+        
+        .text-right {
+            text-align: right;
+        }
+        
+        .mb-2 {
+            margin-bottom: 0.5rem;
+        }
+        
+        .mb-3 {
+            margin-bottom: 0.75rem;
+        }
+        
+        .mb-6 {
+            margin-bottom: 1.5rem;
+        }
+        
+        .mt-1 {
+            margin-top: 0.25rem;
+        }
+        
+        .mt-2 {
+            margin-top: 0.5rem;
+        }
+        
+        @media (min-width: 768px) {
+            .md\\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        
+        @media (min-width: 1280px) {
+            .xl\\:grid-cols-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .xl\\:grid-cols-4 {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .data-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+        
+        .data-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+        }
+        
+        .data-card.gps { border-left: 4px solid #3b82f6; }
+        .data-card.imu { border-left: 4px solid #22c55e; }
+        .data-card.quaternion { border-left: 4px solid #a855f7; }
+        .data-card.magnetic { border-left: 4px solid #ef4444; }
+        .data-card.comparison { border-left: 4px solid #06b6d4; }
+        
+        .value-display {
+            font-family: monospace;
+            font-size: 1.125rem;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+        
+        .label-text {
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .map-container {
+            height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            background: rgba(15, 23, 42, 0.5);
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 16px;
+        }
+        
+        #orientation-3d {
+            width: 100%;
+            height: 400px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .metric-box {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        
+        .metric-label {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+            color: #94a3b8;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 9999px;
+        }
+        
+        .status-ok { 
+            background: #22c55e;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+        }
+        
+        .status-fail { 
+            background: #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .vector-display {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .vector-component {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        
+        .vector-component .label {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+        
+        .vector-component .value {
+            font-size: 1.125rem;
+            font-weight: bold;
+            color: #e2e8f0;
+        }
+        
+        .connection-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connected {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid #22c55e;
+            color: #22c55e;
+        }
+
+        .disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+            color: #ef4444;
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #e2e8f0;
+        }
+
+        .section-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gps-comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .gps-source {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .gps-source.legacy {
+            border-left: 4px solid #f59e0b;
+        }
+
+        .gps-source.xsens {
+            border-left: 4px solid #3b82f6;
+        }
+
+        .speed-gauge {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .speed-gauge svg {
+            transform: rotate(-90deg);
+        }
+
+        .gauge-bg {
+            fill: none;
+            stroke: rgba(148, 163, 184, 0.2);
+            stroke-width: 20;
+        }
+
+        .gauge-fill {
+            fill: none;
+            stroke-width: 20;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.3s ease;
+        }
+
+        .gauge-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .gauge-speed {
+            font-size: 3rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .gauge-unit {
+            font-size: 1rem;
+            color: #94a3b8;
+        }
+
+        .diff-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .diff-good {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .diff-warn {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+        }
+
+        .diff-error {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+        
+        .ripple-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #60a5fa;
+            position: relative;
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+        }
+        
+        .ripple-marker::before,
+        .ripple-marker::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            border: 2px solid #60a5fa;
+            transform: translate(-50%, -50%);
+            animation: ripple 2s infinite;
+        }
+        
+        .ripple-marker::after {
+            animation-delay: 1s;
+        }
+        
+        @keyframes ripple {
+            0% { width: 0; height: 0; opacity: 1; }
+            100% { width: 60px; height: 60px; opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Indicator -->
+    <div id="connection-status" class="connection-indicator disconnected">
+        <span class="status-indicator"></span>
+        <span>Disconnected</span>
+    </div>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="glass-card" style="border-left: 4px solid #a855f7; margin-bottom: 24px;">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">Xsens MTi-680 Dashboard</h1>
+                    <p class="text-blue-300 text-lg mt-2">IMU & GPS Real-time Monitor</p>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm" style="color: #94a3b8;">Data Rate</div>
+                    <div id="message-count" class="text-3xl font-bold" style="color: #60a5fa;">0</div>
+                    <div class="text-sm mt-1">
+                        <span class="status-indicator status-ok" style="margin-right: 8px;"></span>
+                        <span style="color: #22c55e;">Live</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPS Comparison Section -->
+        <div class="glass-card comparison" style="margin-bottom: 24px;">
+            <div class="section-title">
+                <div class="section-icon" style="background: #06b6d4;">📍</div>
+                GPS Sources Comparison
+            </div>
+            
+            <div class="gps-comparison">
+                <!-- Legacy GPS -->
+                <div class="gps-source legacy">
+                    <h3 class="text-lg font-bold mb-3" style="color: #f59e0b;">🛰️ Legacy GPS</h3>
+                    <div class="space-y-2">
+                        <div>
+                            <div class="label-text">Latitude</div>
+                            <div id="legacy-gps-lat" class="value-display">--</div>
+                        </div>
+                        <div>
+                            <div class="label-text">Longitude</div>
+                            <div id="legacy-gps-lon" class="value-display">--</div>
+                        </div>
+                        <div>
+                            <div class="label-text">Altitude</div>
+                            <div id="legacy-gps-alt" class="value-display">--</div>
+                        </div>
+                        <div>
+                            <div class="label-text">Speed</div>
+                            <div id="legacy-gps-speed" class="value-display">--</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Legacy GPS Speed Gauge -->
+                    <div class="speed-gauge" style="margin-top: 24px;">
+                        <svg width="200" height="200">
+                            <circle class="gauge-bg" cx="100" cy="100" r="80"></circle>
+                            <circle id="legacy-gauge-fill" class="gauge-fill" cx="100" cy="100" r="80" 
+                                    style="stroke: #f59e0b; stroke-dasharray: 502.4; stroke-dashoffset: 502.4;"></circle>
+                        </svg>
+                        <div class="gauge-text">
+                            <div id="legacy-gauge-speed" class="gauge-speed" style="color: #f59e0b;">0</div>
+                            <div class="gauge-unit">km/h</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Xsens GPS -->
+                <div class="gps-source xsens">
+                    <h3 class="text-lg font-bold mb-3" style="color: #3b82f6;">🛰️ Xsens GPS</h3>
+                    <div class="space-y-2">
+                        <div>
+                            <div class="label-text">Latitude</div>
+                            <div id="xsens-gps-lat" class="value-display">--</div>
+                            <span id="lat-diff" class="diff-indicator diff-good">±0.0000</span>
+                        </div>
+                        <div>
+                            <div class="label-text">Longitude</div>
+                            <div id="xsens-gps-lon" class="value-display">--</div>
+                            <span id="lon-diff" class="diff-indicator diff-good">±0.0000</span>
+                        </div>
+                        <div>
+                            <div class="label-text">Altitude (Ellipsoid)</div>
+                            <div id="xsens-gps-alt" class="value-display">--</div>
+                            <span id="alt-diff" class="diff-indicator diff-good">±0.0 m</span>
+                        </div>
+                        <div>
+                            <div class="label-text">Speed</div>
+                            <div id="xsens-gps-speed" class="value-display">--</div>
+                            <span id="speed-diff" class="diff-indicator diff-good">±0.0 km/h</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Xsens GPS Speed Gauge -->
+                    <div class="speed-gauge" style="margin-top: 24px;">
+                        <svg width="200" height="200">
+                            <circle class="gauge-bg" cx="100" cy="100" r="80"></circle>
+                            <circle id="xsens-gauge-fill" class="gauge-fill" cx="100" cy="100" r="80" 
+                                    style="stroke: #3b82f6; stroke-dasharray: 502.4; stroke-dashoffset: 502.4;"></circle>
+                        </svg>
+                        <div class="gauge-text">
+                            <div id="xsens-gauge-speed" class="gauge-speed" style="color: #3b82f6;">0</div>
+                            <div class="gauge-unit">km/h</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Distance Difference -->
+            <div style="margin-top: 20px; padding: 16px; background: rgba(15, 23, 42, 0.5); border-radius: 8px; text-align: center;">
+                <div class="label-text">Distance Difference</div>
+                <div id="gps-distance-diff" class="text-2xl font-bold" style="color: #06b6d4;">-- m</div>
+            </div>
+        </div>
+
+        <!-- Main Grid Layout -->
+        <!-- GPS Maps Section -->
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+            <!-- Legacy GPS Map -->
+            <div class="glass-card gps">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="section-title" style="margin-bottom: 0;">
+                        <div class="section-icon" style="background: #f59e0b;">🗺️</div>
+                        Legacy GPS Track
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="toggle-legacy-track-btn" style="background: rgba(34, 197, 94, 0.5); color: #e2e8f0; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; cursor: pointer; border: 1px solid rgba(148, 163, 184, 0.3); transition: all 0.2s;" onmouseover="this.style.background='rgba(34, 197, 94, 0.7)'" onmouseout="this.style.background='rgba(34, 197, 94, 0.5)'">
+                            Start Track
+                        </button>
+                        <button id="clear-legacy-track-btn" style="background: rgba(107, 114, 128, 0.5); color: #e2e8f0; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; cursor: pointer; border: 1px solid rgba(148, 163, 184, 0.3); transition: all 0.2s;" onmouseover="this.style.background='rgba(107, 114, 128, 0.7)'" onmouseout="this.style.background='rgba(107, 114, 128, 0.5)'">
+                            Clear Track
+                        </button>
+                    </div>
+                </div>
+                <div id="legacy-map" class="map-container"></div>
+            </div>
+
+            <!-- Xsens GPS Map -->
+            <div class="glass-card gps">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="section-title" style="margin-bottom: 0;">
+                        <div class="section-icon" style="background: #3b82f6;">🗺️</div>
+                        Xsens GPS Track
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="toggle-xsens-track-btn" style="background: rgba(34, 197, 94, 0.5); color: #e2e8f0; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; cursor: pointer; border: 1px solid rgba(148, 163, 184, 0.3); transition: all 0.2s;" onmouseover="this.style.background='rgba(34, 197, 94, 0.7)'" onmouseout="this.style.background='rgba(34, 197, 94, 0.5)'">
+                            Start Track
+                        </button>
+                        <button id="clear-xsens-track-btn" style="background: rgba(107, 114, 128, 0.5); color: #e2e8f0; padding: 6px 12px; border-radius: 6px; font-size: 0.875rem; cursor: pointer; border: 1px solid rgba(148, 163, 184, 0.3); transition: all 0.2s;" onmouseover="this.style.background='rgba(107, 114, 128, 0.7)'" onmouseout="this.style.background='rgba(107, 114, 128, 0.5)'">
+                            Clear Track
+                        </button>
+                    </div>
+                </div>
+                <div id="xsens-map" class="map-container"></div>
+            </div>
+        </div>
+
+        <!-- IMU Comparison Charts Section -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+            <!-- Acceleration X Chart -->
+            <div class="glass-card imu">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #22c55e;">📊</div>
+                    Acceleration X (m/s²)
+                </div>
+                <div class="chart-container">
+                    <canvas id="acc-x-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Acceleration Y Chart -->
+            <div class="glass-card imu">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #22c55e;">📊</div>
+                    Acceleration Y (m/s²)
+                </div>
+                <div class="chart-container">
+                    <canvas id="acc-y-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Acceleration Z Chart -->
+            <div class="glass-card imu">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #22c55e;">📊</div>
+                    Acceleration Z (m/s²)
+                </div>
+                <div class="chart-container">
+                    <canvas id="acc-z-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gyroscope Charts -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+            <!-- Gyroscope X Chart -->
+            <div class="glass-card imu">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #3b82f6;">📊</div>
+                    Gyroscope X (rad/s)
+                </div>
+                <div class="chart-container">
+                    <canvas id="gyro-x-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gyroscope Y Chart -->
+            <div class="glass-card imu">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #3b82f6;">📊</div>
+                    Gyroscope Y (rad/s)
+                </div>
+                <div class="chart-container">
+                    <canvas id="gyro-y-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Gyroscope Z Chart -->
+            <div class="glass-card imu">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #3b82f6;">📊</div>
+                    Gyroscope Z (rad/s)
+                </div>
+                <div class="chart-container">
+                    <canvas id="gyro-z-chart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Data Rows -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
+            <!-- Delta V -->
+            <div class="glass-card imu">
+                <div class="section-title" style="font-size: 1rem;">
+                    <div class="section-icon" style="background: #22c55e; width: 20px; height: 20px; font-size: 0.75rem;">Δ</div>
+                    Delta V
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-2">
+                    <div>
+                        <div class="label-text">X</div>
+                        <div id="xsens-deltav-x" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">Y</div>
+                        <div id="xsens-deltav-y" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">Z</div>
+                        <div id="xsens-deltav-z" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delta Q -->
+            <div class="glass-card quaternion">
+                <div class="section-title" style="font-size: 1rem;">
+                    <div class="section-icon" style="background: #a855f7; width: 20px; height: 20px; font-size: 0.75rem;">Δ</div>
+                    Delta Q
+                </div>
+                <div class="grid grid-cols-4 gap-2 mt-2">
+                    <div>
+                        <div class="label-text">W</div>
+                        <div id="xsens-deltaq-w" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">X</div>
+                        <div id="xsens-deltaq-x" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">Y</div>
+                        <div id="xsens-deltaq-y" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">Z</div>
+                        <div id="xsens-deltaq-z" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Velocity Components -->
+            <div class="glass-card gps">
+                <div class="section-title" style="font-size: 1rem;">
+                    <div class="section-icon" style="background: #3b82f6; width: 20px; height: 20px; font-size: 0.75rem;">→</div>
+                    Velocity
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-2">
+                    <div>
+                        <div class="label-text">X</div>
+                        <div id="xsens-vel-x" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">Y</div>
+                        <div id="xsens-vel-y" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                    <div>
+                        <div class="label-text">Z</div>
+                        <div id="xsens-vel-z" class="value-display" style="font-size: 0.875rem;">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Summary -->
+            <div class="glass-card" style="border-left: 4px solid #06b6d4;">
+                <div class="section-title" style="font-size: 1rem;">
+                    <div class="section-icon" style="background: #06b6d4; width: 20px; height: 20px; font-size: 0.75rem;">✓</div>
+                    Status
+                </div>
+                <div class="space-y-2 mt-2">
+                    <div class="flex justify-between items-center">
+                        <span class="label-text">GPS</span>
+                        <span id="gps-status" class="status-indicator status-fail"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="label-text">IMU</span>
+                        <span id="imu-status" class="status-indicator status-fail"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="label-text">Magnetometer</span>
+                        <span id="mag-status" class="status-indicator status-fail"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Footer -->
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center text-gray-500">
+            <p class="mb-2">Last Update: <span id="last-update" class="font-mono">N/A</span></p>
+            <p class="text-sm">NTUR Racing Team - Xsens IMU Monitor v1.0</p>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket Connection
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        
+        // Initialize Legacy GPS Map
+        let legacyMap = L.map('legacy-map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(legacyMap);
+        
+        let legacyMarker = null;
+        let legacyPathPoints = [];
+        let legacyPathPolyline = null;
+        let legacyMapInitialized = false;
+        let legacyTrackingEnabled = false;
+
+        // Initialize Xsens GPS Map
+        let xsensMap = L.map('xsens-map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(xsensMap);
+        
+        let xsensMarker = null;
+        let xsensPathPoints = [];
+        let xsensPathPolyline = null;
+        let xsensMapInitialized = false;
+        let xsensTrackingEnabled = false;
+
+        // GPS Map Update Functions
+        function updateLegacyGPSMap(lat, lon) {
+            if (lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                const latLng = [lat, lon];
+                
+                if (!legacyMapInitialized) {
+                    legacyMap.setView(latLng, 15);
+                    legacyMapInitialized = true;
+                }
+                
+                if (legacyMarker) {
+                    legacyMarker.setLatLng(latLng);
+                } else {
+                    const rippleIcon = L.divIcon({
+                        className: 'ripple-marker',
+                        html: '<div style="background: #f59e0b; width: 20px; height: 20px; border-radius: 50%; box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+                    
+                    legacyMarker = L.marker(latLng, { icon: rippleIcon }).addTo(legacyMap)
+                        .bindPopup('Legacy GPS Position');
+                }
+                
+                if (legacyTrackingEnabled) {
+                    legacyPathPoints.push(latLng);
+                    if (legacyPathPolyline) {
+                        legacyMap.removeLayer(legacyPathPolyline);
+                    }
+                    legacyPathPolyline = L.polyline(legacyPathPoints, {
+                        color: '#f59e0b',
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(legacyMap);
+                }
+                
+                if (legacyMap.getZoom() >= 10) {
+                    legacyMap.setView(latLng, legacyMap.getZoom());
+                }
+            }
+        }
+
+        function updateXsensGPSMap(lat, lon) {
+            if (lat !== null && lon !== null && !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                const latLng = [lat, lon];
+                
+                if (!xsensMapInitialized) {
+                    xsensMap.setView(latLng, 15);
+                    xsensMapInitialized = true;
+                }
+                
+                if (xsensMarker) {
+                    xsensMarker.setLatLng(latLng);
+                } else {
+                    const rippleIcon = L.divIcon({
+                        className: 'ripple-marker',
+                        html: '<div style="background: #3b82f6; width: 20px; height: 20px; border-radius: 50%; box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+                    
+                    xsensMarker = L.marker(latLng, { icon: rippleIcon }).addTo(xsensMap)
+                        .bindPopup('Xsens GPS Position');
+                }
+                
+                if (xsensTrackingEnabled) {
+                    xsensPathPoints.push(latLng);
+                    if (xsensPathPolyline) {
+                        xsensMap.removeLayer(xsensPathPolyline);
+                    }
+                    xsensPathPolyline = L.polyline(xsensPathPoints, {
+                        color: '#3b82f6',
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(xsensMap);
+                }
+                
+                if (xsensMap.getZoom() >= 10) {
+                    xsensMap.setView(latLng, xsensMap.getZoom());
+                }
+            }
+        }
+
+        // Chart Setup - Individual axis comparison charts
+        const maxDataPoints = 50;
+        
+        // Acceleration X Chart
+        const accXChart = new Chart(document.getElementById('acc-x-chart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Xsens IMU', 
+                        data: [], 
+                        borderColor: 'rgb(59, 130, 246)', 
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    { 
+                        label: 'IMU2', 
+                        data: [], 
+                        borderColor: 'rgb(239, 68, 68)', 
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: false,
+                        title: { display: true, text: 'm/s²' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Acceleration Y Chart
+        const accYChart = new Chart(document.getElementById('acc-y-chart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Xsens IMU', 
+                        data: [], 
+                        borderColor: 'rgb(59, 130, 246)', 
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    { 
+                        label: 'IMU2', 
+                        data: [], 
+                        borderColor: 'rgb(239, 68, 68)', 
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: false,
+                        title: { display: true, text: 'm/s²' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Acceleration Z Chart
+        const accZChart = new Chart(document.getElementById('acc-z-chart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Xsens IMU', 
+                        data: [], 
+                        borderColor: 'rgb(59, 130, 246)', 
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    { 
+                        label: 'IMU2', 
+                        data: [], 
+                        borderColor: 'rgb(239, 68, 68)', 
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: false,
+                        title: { display: true, text: 'm/s²' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Gyroscope X Chart
+        const gyroXChart = new Chart(document.getElementById('gyro-x-chart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Xsens IMU', 
+                        data: [], 
+                        borderColor: 'rgb(34, 197, 94)', 
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    { 
+                        label: 'IMU2', 
+                        data: [], 
+                        borderColor: 'rgb(168, 85, 247)', 
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: false,
+                        title: { display: true, text: 'rad/s' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Gyroscope Y Chart
+        const gyroYChart = new Chart(document.getElementById('gyro-y-chart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Xsens IMU', 
+                        data: [], 
+                        borderColor: 'rgb(34, 197, 94)', 
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    { 
+                        label: 'IMU2', 
+                        data: [], 
+                        borderColor: 'rgb(168, 85, 247)', 
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: false,
+                        title: { display: true, text: 'rad/s' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Gyroscope Z Chart
+        const gyroZChart = new Chart(document.getElementById('gyro-z-chart').getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { 
+                        label: 'Xsens IMU', 
+                        data: [], 
+                        borderColor: 'rgb(34, 197, 94)', 
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    },
+                    { 
+                        label: 'IMU2', 
+                        data: [], 
+                        borderColor: 'rgb(168, 85, 247)', 
+                        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { 
+                        beginAtZero: false,
+                        title: { display: true, text: 'rad/s' }
+                    }
+                },
+                plugins: {
+                    legend: { position: 'top' }
+                }
+            }
+        });
+
+        // Update comparison chart function
+        function updateComparisonChart(chart, xsensValue, imu2Value) {
+            if (chart.data.labels.length >= maxDataPoints) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+                chart.data.datasets[1].data.shift();
+            }
+            
+            const timestamp = new Date().toLocaleTimeString();
+            chart.data.labels.push(timestamp);
+            chart.data.datasets[0].data.push(xsensValue || 0);
+            chart.data.datasets[1].data.push(imu2Value || 0);
+            chart.update('none');
+        }
+
+        // Format value helper
+        function formatValue(value, decimals = 3) {
+            if (value === null || value === undefined) return '--';
+            return typeof value === 'number' ? value.toFixed(decimals) : '--';
+        }
+
+        // Update status indicator
+        function updateStatus(elementId, hasData) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.className = hasData ? 'status-indicator status-ok' : 'status-indicator status-fail';
+            }
+        }
+
+        // WebSocket event handlers
+        ws.onopen = function() {
+            console.log('WebSocket Connected');
+            const statusEl = document.getElementById('connection-status');
+            statusEl.className = 'connection-indicator connected';
+            statusEl.innerHTML = '<span class="status-indicator"></span><span>Connected</span>';
+        };
+        
+        ws.onerror = function(error) {
+            console.error('WebSocket Error:', error);
+        };
+        
+        ws.onclose = function() {
+            console.log('WebSocket Disconnected');
+            const statusEl = document.getElementById('connection-status');
+            statusEl.className = 'connection-indicator disconnected';
+            statusEl.innerHTML = '<span class="status-indicator"></span><span>Disconnected</span>';
+            setTimeout(() => location.reload(), 5000);
+        };
+
+        // Calculate distance between two GPS coordinates (Haversine formula)
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                     Math.cos(φ1) * Math.cos(φ2) *
+                     Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // Distance in meters
+        }
+
+        // Update speed gauge
+        function updateSpeedGauge(gaugeId, speedTextId, speed, maxSpeed = 200) {
+            const gauge = document.getElementById(gaugeId);
+            const speedText = document.getElementById(speedTextId);
+            
+            if (gauge && speedText) {
+                const circumference = 2 * Math.PI * 80; // radius = 80
+                const percentage = Math.min(speed / maxSpeed, 1);
+                const offset = circumference * (1 - percentage);
+                
+                gauge.style.strokeDashoffset = offset;
+                speedText.textContent = Math.round(speed);
+            }
+        }
+
+        // Update difference indicator
+        function updateDiffIndicator(elementId, value, thresholdGood, thresholdWarn, suffix = '') {
+            const el = document.getElementById(elementId);
+            if (el) {
+                const absValue = Math.abs(value);
+                let className = 'diff-indicator ';
+                
+                if (absValue <= thresholdGood) {
+                    className += 'diff-good';
+                } else if (absValue <= thresholdWarn) {
+                    className += 'diff-warn';
+                } else {
+                    className += 'diff-error';
+                }
+                
+                el.className = className;
+                el.textContent = `±${absValue.toFixed(suffix === 'm' ? 1 : 4)}${suffix}`;
+            }
+        }
+
+        // Main data update handler
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Debug: Log received data with full structure
+            console.log('Received data:', {
+                hasXsens: !!data.xsens,
+                hasGPS: !!data.gps,
+                hasIMU2: !!data.imu2,
+                hasVelocity: !!data.velocity,
+                xsensGPS: data.xsens?.gps,
+                legacyGPS: data.gps,
+                xsensAcceleration: data.xsens?.acceleration,
+                xsensVelocity: data.xsens?.velocity,
+                imu2Full: data.imu2,
+                xsensFull: data.xsens
+            });
+            
+            // Update message count
+            document.getElementById('message-count').textContent = data.message_count || 0;
+            
+            // Update Xsens data
+            if (data.xsens) {
+                const xsens = data.xsens;
+                
+                // Check if we have any data
+                const hasGPSData = xsens.gps && (xsens.gps.lat !== null || xsens.gps.lon !== null);
+                const hasIMUData = xsens.quaternion && xsens.quaternion.q0 !== null;
+                const hasMagData = xsens.magnetic_field && xsens.magnetic_field.mag_x !== null;
+                
+                updateStatus('gps-status', hasGPSData);
+                updateStatus('imu-status', hasIMUData);
+                updateStatus('mag-status', hasMagData);
+                
+                // Xsens GPS Data
+                let xsensLat = null, xsensLon = null, xsensAlt = null, xsensSpeed = 0;
+                if (xsens.gps) {
+                    xsensLat = xsens.gps.lat;
+                    xsensLon = xsens.gps.lon;
+                    xsensAlt = xsens.gps.alt;
+                    
+                    document.getElementById('xsens-gps-lat').textContent = formatValue(xsensLat, 7) + '°';
+                    document.getElementById('xsens-gps-lon').textContent = formatValue(xsensLon, 7) + '°';
+                    document.getElementById('xsens-gps-alt').textContent = formatValue(xsensAlt, 2) + ' m';
+                    
+                    updateXsensGPSMap(xsensLat, xsensLon);
+                }
+                
+                // Calculate Xsens speed from velocity
+                if (xsens.velocity) {
+                    document.getElementById('xsens-vel-x').textContent = formatValue(xsens.velocity.vel_x, 3);
+                    document.getElementById('xsens-vel-y').textContent = formatValue(xsens.velocity.vel_y, 3);
+                    document.getElementById('xsens-vel-z').textContent = formatValue(xsens.velocity.vel_z, 3);
+                    
+                    if (xsens.velocity.vel_x !== null && xsens.velocity.vel_y !== null) {
+                        const speedMs = Math.sqrt(
+                            xsens.velocity.vel_x ** 2 + 
+                            xsens.velocity.vel_y ** 2
+                        );
+                        xsensSpeed = speedMs * 3.6; // km/h
+                        document.getElementById('xsens-gps-speed').textContent = formatValue(xsensSpeed, 2) + ' km/h';
+                        updateSpeedGauge('xsens-gauge-fill', 'xsens-gauge-speed', xsensSpeed);
+                    }
+                }
+                
+                // Acceleration - Update comparison charts
+                if (xsens.acceleration) {
+                    const xsensAccX = xsens.acceleration.acc_x || 0;
+                    const xsensAccY = xsens.acceleration.acc_y || 0;
+                    const xsensAccZ = xsens.acceleration.acc_z || 0;
+                    
+                    // Get IMU2 data (nested structure: imu2.accel.x/y/z)
+                    // Convert from g to m/s² by multiplying by 9.81
+                    const imu2AccX = (data.imu2?.accel?.x || 0) * 9.81;
+                    const imu2AccY = (data.imu2?.accel?.y || 0) * 9.81;
+                    const imu2AccZ = (data.imu2?.accel?.z || 0) * 9.81;
+                    
+                    updateComparisonChart(accXChart, xsensAccX, imu2AccX);
+                    updateComparisonChart(accYChart, xsensAccY, imu2AccY);
+                    updateComparisonChart(accZChart, xsensAccZ, imu2AccZ);
+                }
+                
+                // Rate of Turn (Gyroscope) - Update comparison charts
+                if (xsens.rate_of_turn) {
+                    const xsensGyrX = xsens.rate_of_turn.gyr_x || 0;
+                    const xsensGyrY = xsens.rate_of_turn.gyr_y || 0;
+                    const xsensGyrZ = xsens.rate_of_turn.gyr_z || 0;
+                    
+                    // Get IMU2 data (nested structure: imu2.gyro.x/y/z)
+                    const imu2GyrX = data.imu2?.gyro?.x || 0;
+                    const imu2GyrY = data.imu2?.gyro?.y || 0;
+                    const imu2GyrZ = data.imu2?.gyro?.z || 0;
+                    
+                    updateComparisonChart(gyroXChart, xsensGyrX, imu2GyrX);
+                    updateComparisonChart(gyroYChart, xsensGyrY, imu2GyrY);
+                    updateComparisonChart(gyroZChart, xsensGyrZ, imu2GyrZ);
+                }
+                
+                // Delta V
+                if (xsens.delta_v) {
+                    document.getElementById('xsens-deltav-x').textContent = formatValue(xsens.delta_v.x, 5);
+                    document.getElementById('xsens-deltav-y').textContent = formatValue(xsens.delta_v.y, 5);
+                    document.getElementById('xsens-deltav-z').textContent = formatValue(xsens.delta_v.z, 5);
+                }
+                
+                // Delta Q
+                if (xsens.delta_q) {
+                    document.getElementById('xsens-deltaq-w').textContent = formatValue(xsens.delta_q.dq0, 5);
+                    document.getElementById('xsens-deltaq-x').textContent = formatValue(xsens.delta_q.dq1, 5);
+                    document.getElementById('xsens-deltaq-y').textContent = formatValue(xsens.delta_q.dq2, 5);
+                    document.getElementById('xsens-deltaq-z').textContent = formatValue(xsens.delta_q.dq3, 5);
+                }
+            }
+
+            // Legacy GPS comparison (outside xsens block)
+            if (data.gps) {
+                const legacyLat = data.gps.lat;
+                const legacyLon = data.gps.lon;
+                const legacyAlt = data.gps.alt;
+                const legacySpeed = data.velocity?.speed_kmh || 0;
+                
+                document.getElementById('legacy-gps-lat').textContent = formatValue(legacyLat, 7) + '°';
+                document.getElementById('legacy-gps-lon').textContent = formatValue(legacyLon, 7) + '°';
+                document.getElementById('legacy-gps-alt').textContent = formatValue(legacyAlt, 2) + ' m';
+                document.getElementById('legacy-gps-speed').textContent = formatValue(legacySpeed, 2) + ' km/h';
+                updateSpeedGauge('legacy-gauge-fill', 'legacy-gauge-speed', legacySpeed);
+                
+                updateLegacyGPSMap(legacyLat, legacyLon);
+                
+                // Calculate differences only if xsens data exists
+                if (data.xsens && data.xsens.gps) {
+                    const xsensLat = data.xsens.gps.lat;
+                    const xsensLon = data.xsens.gps.lon;
+                    const xsensAlt = data.xsens.gps.alt;
+                    
+                    // Calculate Xsens speed
+                    let xsensSpeed = 0;
+                    if (data.xsens.velocity && data.xsens.velocity.vel_x !== null && data.xsens.velocity.vel_y !== null) {
+                        const speedMs = Math.sqrt(
+                            data.xsens.velocity.vel_x ** 2 + 
+                            data.xsens.velocity.vel_y ** 2
+                        );
+                        xsensSpeed = speedMs * 3.6;
+                    }
+                    
+                    if (xsensLat !== null && legacyLat !== null) {
+                        const latDiff = xsensLat - legacyLat;
+                        const lonDiff = xsensLon - legacyLon;
+                        const altDiff = xsensAlt - legacyAlt;
+                        const speedDiff = xsensSpeed - legacySpeed;
+                        
+                        updateDiffIndicator('lat-diff', latDiff, 0.0001, 0.001);
+                        updateDiffIndicator('lon-diff', lonDiff, 0.0001, 0.001);
+                        updateDiffIndicator('alt-diff', altDiff, 5, 20, ' m');
+                        updateDiffIndicator('speed-diff', speedDiff, 2, 5, ' km/h');
+                        
+                        // Calculate distance difference
+                        const distance = calculateDistance(legacyLat, legacyLon, xsensLat, xsensLon);
+                        document.getElementById('gps-distance-diff').textContent = formatValue(distance, 2) + ' m';
+                    }
+                }
+            }
+        };
+
+        // GPS Tracking Controls
+        document.getElementById('toggle-legacy-track-btn').addEventListener('click', function() {
+            legacyTrackingEnabled = !legacyTrackingEnabled;
+            this.textContent = legacyTrackingEnabled ? 'Stop Track' : 'Start Track';
+            this.style.background = legacyTrackingEnabled ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)';
+        });
+
+        document.getElementById('clear-legacy-track-btn').addEventListener('click', function() {
+            legacyPathPoints = [];
+            if (legacyPathPolyline) {
+                legacyMap.removeLayer(legacyPathPolyline);
+                legacyPathPolyline = null;
+            }
+        });
+
+        document.getElementById('toggle-xsens-track-btn').addEventListener('click', function() {
+            xsensTrackingEnabled = !xsensTrackingEnabled;
+            this.textContent = xsensTrackingEnabled ? 'Stop Track' : 'Start Track';
+            this.style.background = xsensTrackingEnabled ? 'rgba(239, 68, 68, 0.5)' : 'rgba(34, 197, 94, 0.5)';
+        });
+
+        document.getElementById('clear-xsens-track-btn').addEventListener('click', function() {
+            xsensPathPoints = [];
+            if (xsensPathPolyline) {
+                xsensMap.removeLayer(xsensPathPolyline);
+                xsensPathPolyline = null;
+            }
+        });
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+        });
+    </script>
+</body>
+</html>
